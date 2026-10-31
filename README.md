@@ -8,13 +8,13 @@
 - ثبت درخواست خرید با اطلاعات سربرگ، نوع اقلام، محل تأمین، واحد درخواست‌کننده و دارایی ثابت.
 - جدول پویای اقلام: افزودن/حذف ردیف، کد و شرح کالا، واحد، مقدار، تاریخ نیاز و محل مصرف.
 - شماره درخواست و تاریخ شمسی خودکار.
-- گردش تأیید مرحله‌ای قابل پیکربندی در جدول `purchase.approval_routes`.
+- گردش تأیید مرحله‌ای قابل پیکربندی در جدول `Project.approval_routes`.
 - ثبت تاریخچه عملیات و قابلیت چاپ A4.
 - محافظت CSRF و استفاده از پارامترهای SQL.
 
 ## راه‌اندازی
 1. Python 3.11+ و ODBC Driver 17 یا 18 نصب باشد.
-2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس مقصد اجرا کنید.
+2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس `bi` اجرا کنید.
 3. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
    `python -m venv .venv`
    `.venv\\Scripts\\activate`
@@ -26,15 +26,15 @@
 
 ## مجوزهای SQL
 - دیتابیس احراز هویت: دسترسی SELECT به `[Project].[loginusers]`.
-- دیتابیس درخواست خرید: دسترسی SELECT/INSERT/UPDATE به جداول schema `purchase`.
+- دیتابیس درخواست خرید: دسترسی SELECT/INSERT/UPDATE به جداول schema `Project`.
 - حساب برنامه نباید دسترسی DDL داشته باشد؛ اسکریپت ساخت جداول را مدیر دیتابیس اجرا کند.
 
 ## تنظیم گردش تأیید
-پس از ساخت schema، برای هر نوع درخواست و هر مرحله یک ردیف در `purchase.approval_routes` اضافه کنید. مقدار `request_type` یکی از `goods`، `service`، `equipment` یا `other` است. `approver_username` باید دقیقاً با نام کاربری جدول سازمانی مطابقت داشته باشد. ترتیب مراحل با `step_no` مشخص می‌شود.
+پس از ساخت schema، برای هر نوع درخواست و هر مرحله یک ردیف در `Project.approval_routes` اضافه کنید. مقدار `request_type` یکی از `goods`، `service`، `equipment` یا `other` است. `approver_username` باید دقیقاً با نام کاربری جدول سازمانی مطابقت داشته باشد. ترتیب مراحل با `step_no` مشخص می‌شود.
 
 نمونه:
 ```sql
-INSERT INTO purchase.approval_routes(request_type, step_no, approver_username, approver_title, is_active)
+INSERT INTO Project.approval_routes(request_type, step_no, approver_username, approver_title, is_active)
 VALUES ('goods', 1, N'username1', N'مدیر واحد', 1),
        ('goods', 2, N'username2', N'مدیر بازرگانی', 1);
 ```
