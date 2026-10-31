@@ -22,19 +22,24 @@ login_manager.login_message = "برای ادامه ابتدا وارد ساما�
 login_manager.login_message_category = "warning"
 
 
-def connection_string(prefix):
-    server = os.getenv(f"{prefix}_DB_SERVER", r"192.168.120.38\odsm")
-    database = os.getenv(f"{prefix}_DB_NAME", "bi" if prefix == "AUTH" else "sigd")
-    driver = os.getenv(f"{prefix}_DB_DRIVER", "ODBC Driver 17 for SQL Server")
-    user, password = os.getenv(f"{prefix}_DB_USER", "").strip(), os.getenv(f"{prefix}_DB_PASSWORD", "")
-    parts = [f"DRIVER={{{driver}}}", f"SERVER={server}", f"DATABASE={database}",
-             f"Encrypt={os.getenv(f'{prefix}_DB_ENCRYPT', 'no')}",
-             f"TrustServerCertificate={os.getenv(f'{prefix}_DB_TRUST_SERVER_CERTIFICATE', 'yes')}"]
-    if user:
-        parts += [f"UID={user}", f"PWD={password}"]
-    else:
-        parts.append("Trusted_Connection=yes")
-    return ";".join(parts) + ";"
+def conn_string(auth=False):
+    # Original SQL Server connection settings restored.
+    server = r'192.168.120.38\odsm'
+    database = 'bi'
+    user = 'p_ehteshamzadeh'
+    password = 'PeMeh-4967!'
+    driver = 'ODBC Driver 17 for SQL Server'
+    parts = [
+        f'DRIVER={{{driver}}}',
+        f'SERVER={server}',
+        f'DATABASE={database}',
+        'Encrypt=no',
+        'TrustServerCertificate=yes',
+        f'UID={user}',
+        f'PWD={password}'
+    ]
+    return ';'.join(parts) + ';'
+
 
 
 def auth_db():
