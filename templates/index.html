@@ -1,4 +1,63 @@
-{% extends "base.html" %}{% block title %}داشبورد درخواست خرید | پادرا{% endblock %}{% block content %}
-<section class="page-head"><div><span class="eyebrow blue">PURCHASING / WORKFLOW</span><h1>درخواست‌های خرید</h1><p>مدیریت و پیگیری درخواست‌های خرید شرکت پادرا</p></div><a class="btn primary" href="{{url_for('new_request')}}">＋ ثبت درخواست جدید</a></section>
-<section class="panel"><div class="panel-head"><div><h2>فهرست درخواست‌ها</h2><p>درخواست‌هایی که ثبت کرده‌اید یا برای تأیید به شما ارجاع شده‌اند</p></div><span class="count">{{rows|length}} مورد</span></div>
-{% if rows %}<div class="table-wrap"><table><thead><tr><th>شماره درخواست</th><th>تاریخ</th><th>نوع</th><th>واحد درخواست‌کننده</th><th>وضعیت</th><th></th></tr></thead><tbody>{% for r in rows %}<tr><td class="request-no">{{r[1] or ('#'~r[0])}}</td><td>{{r[2]}}</td><td>{{{'goods':'مواد اولیه','service':'خدمات','equipment':'تجهیزات','other':'سایر'}[r[3]]}}</td><td>{{r[4]}}</td><td><span class="status {{r[5]}}">{{{'pending':'در انتظار تأیید','submitted':'ثبت‌شده / بدون مسیر تأیید','approved':'تأیید نهایی','rejected':'رد شده'}[r[5]]}}</span></td><td><a class="text-link" href="{{url_for('view_request',request_id=r[0])}}">مشاهده ←</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty"><div class="empty-icon">▤</div><b>هنوز درخواستی ثبت نشده است</b><p>برای شروع، اولین درخواست خرید را ایجاد کنید.</p><a class="btn secondary" href="{{url_for('new_request')}}">ثبت درخواست خرید</a></div>{% endif %}</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}داشبورد درخواست خرید | پادرا{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div><span class="eyebrow blue">PURCHASING / WORKFLOW</span><h1>مرکز پیگیری درخواست‌ها</h1><p>وضعیت لحظه‌ای درخواست‌ها، مسئول اقدام بعدی و سوابق گردش کار</p></div>
+  <a class="btn primary" href="{{url_for('new_request')}}">＋ ثبت درخواست جدید</a>
+</section>
+
+<section class="stats-grid">
+  <a class="stat-card {% if not status_filter %}selected{% endif %}" href="{{url_for('index')}}">
+    <span>کل درخواست‌های قابل مشاهده</span><b>{{counts.all}}</b><small>درخواست‌های شما و ارجاع‌شده به شما</small>
+  </a>
+  <a class="stat-card waiting {% if status_filter=='pending' %}selected{% endif %}" href="{{url_for('index',status='pending')}}">
+    <span>در جریان تأیید</span><b>{{counts.pending}}</b><small>در انتظار اقدام تأییدکننده</small>
+  </a>
+  <a class="stat-card neutral {% if status_filter=='submitted' %}selected{% endif %}" href="{{url_for('index',status='submitted')}}">
+    <span>بدون مسیر تأیید</span><b>{{counts.submitted}}</b><small>نیازمند تعریف مسیر گردش</small>
+  </a>
+  <a class="stat-card success {% if status_filter=='approved' %}selected{% endif %}" href="{{url_for('index',status='approved')}}">
+    <span>تأیید نهایی</span><b>{{counts.approved}}</b><small>گردش کار تکمیل شده</small>
+  </a>
+  <a class="stat-card rejected {% if status_filter=='rejected' %}selected{% endif %}" href="{{url_for('index',status='rejected')}}">
+    <span>رد شده</span><b>{{counts.rejected}}</b><small>درخواست‌های ردشده</small>
+  </a>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><div><h2>فهرست درخواست‌ها</h2><p>برای مشاهده جزئیات، گردش تأیید و تاریخچه هر درخواست روی شماره آن کلیک کنید.</p></div><span class="count">{{rows|length}} مورد</span></div>
+  <form class="filter-bar" method="get" action="{{url_for('index')}}">
+    <input name="q" value="{{search_text}}" placeholder="جستجو بر اساس شماره، واحد یا درخواست‌کننده...">
+    <select name="status">
+      <option value="">همه وضعیت‌ها</option>
+      <option value="pending" {% if status_filter=='pending' %}selected{% endif %}>در جریان تأیید</option>
+      <option value="submitted" {% if status_filter=='submitted' %}selected{% endif %}>بدون مسیر تأیید</option>
+      <option value="approved" {% if status_filter=='approved' %}selected{% endif %}>تأیید نهایی</option>
+      <option value="rejected" {% if status_filter=='rejected' %}selected{% endif %}>رد شده</option>
+    </select>
+    <button class="btn secondary" type="submit">اعمال فیلتر</button>
+    {% if search_text or status_filter %}<a class="text-link" href="{{url_for('index')}}">پاک‌کردن فیلتر</a>{% endif %}
+  </form>
+  {% if rows %}
+  <div class="table-wrap"><table class="tracking-table">
+    <thead><tr><th>شماره درخواست</th><th>تاریخ</th><th>نوع</th><th>واحد</th><th>وضعیت</th><th>مرحله / اقدام بعدی</th><th>اقلام</th><th>آخرین تغییر</th><th></th></tr></thead>
+    <tbody>{% for r in rows %}
+      <tr>
+        <td><a class="request-no" href="{{url_for('view_request',request_id=r[0])}}">{{r[1] or ('#'~r[0])}}</a><small class="sub-cell">ثبت‌کننده: {{r[7]}}</small></td>
+        <td>{{r[2]}}</td>
+        <td>{{{'goods':'مواد اولیه','service':'خدمات','equipment':'تجهیزات','other':'سایر'}.get(r[3],r[3])}}</td>
+        <td>{{r[4]}}</td>
+        <td><span class="status {{r[5]}}">{{{'pending':'در جریان تأیید','submitted':'بدون مسیر تأیید','approved':'تأیید نهایی','rejected':'رد شده'}.get(r[5],r[5])}}</span></td>
+        <td>{% if r[5]=='pending' and r[9] %}<b>{{r[10] or 'تأییدکننده'}}</b><small class="sub-cell">{{r[9]}} · مرحله {{r[11]}} از {{r[12]}}</small>{% elif r[5]=='submitted' %}<span class="muted-cell">تعریف مسیر تأیید لازم است</span>{% elif r[5]=='approved' %}<span class="muted-cell">گردش تکمیل شده</span>{% else %}<span class="muted-cell">نیازمند بررسی جزئیات</span>{% endif %}</td>
+        <td>{{r[13]}}</td>
+        <td>{{r[8].strftime('%Y/%m/%d %H:%M') if r[8] else r[6].strftime('%Y/%m/%d %H:%M')}}</td>
+        <td><a class="text-link" href="{{url_for('view_request',request_id=r[0])}}">جزئیات ←</a></td>
+      </tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="list-note">برای حفظ سرعت، حداکثر ۱۰۰ درخواست اخیر نمایش داده می‌شود. برای دیدن تاریخچه کامل هر مورد، وارد جزئیات آن شوید.</p>
+  {% else %}
+  <div class="empty"><div class="empty-icon">▤</div><b>درخواستی با این مشخصات پیدا نشد</b><p>فیلترها را پاک کنید یا یک درخواست جدید ثبت کنید.</p><a class="btn secondary" href="{{url_for('index')}}">نمایش همه درخواست‌ها</a></div>
+  {% endif %}
+</section>
+{% endblock %}
