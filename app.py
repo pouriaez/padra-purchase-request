@@ -1,4 +1,5 @@
 import os, secrets
+from pathlib import Path
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -11,7 +12,8 @@ from flask_login import LoginManager, UserMixin, current_user, login_required, l
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.exceptions import HTTPException
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BASE_DIR / '.env', override=False)
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_hex(32)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
@@ -25,12 +27,11 @@ login_manager.login_message_category = "warning"
 def conn_string(auth=False):
     """Build a SQL Server connection string using the project's .env settings.
 
-    AUTH connects to the organizational login database (bi).
-    DATA connects to the purchase-request database (sigd).
+    Both authentication and purchase-request data are stored in bi.
     """
     prefix = "AUTH_DB_" if auth else "DATA_DB_"
     server = os.getenv(prefix + "SERVER", r"192.168.120.38\odsm")
-    database = os.getenv(prefix + "NAME", "bi" if auth else "sigd")
+    database = os.getenv(prefix + "NAME", "bi")
     driver = os.getenv(prefix + "DRIVER", "ODBC Driver 17 for SQL Server")
     user = os.getenv(prefix + "USER", "").strip()
     password = os.getenv(prefix + "PASSWORD", "")
@@ -136,16 +137,16 @@ def get_request(request_id):
         cur = conn.cursor()
         cur.execute("""SELECT id, request_no, request_date_fa, request_type, unit_name, supply_location,
                               fixed_asset, request_reason, requester_username, status
-                       FROM purchase.requests WHERE id=?""", request_id)
+                       FROM Project.requests WHERE id=?""", request_id)
         header = cur.fetchone()
         if not header: return None
         cur.execute("""SELECT line_no,item_code,item_description,unit_name,quantity,needed_date_fa,usage_location
-                       FROM purchase.request_items WHERE request_id=? ORDER BY line_no""", request_id)
+                       FROM Project.request_items WHERE request_id=? ORDER BY line_no""", request_id)
         items = cur.fetchall()
         cur.execute("""SELECT step_no,approver_username,approver_title,decision,comment,decided_at
-                       FROM purchase.approvals WHERE request_id=? ORDER BY step_no""", request_id)
+                       FROM Project.approvals WHERE request_id=? ORDER BY step_no""", request_id)
         approvals = cur.fetchall()
-        cur.execute("""SELECT action_name,actor_username,details,created_at FROM purchase.request_history
+        cur.execute("""SELECT action_name,actor_username,details,created_at FROM Project.request_history
                        WHERE request_id=? ORDER BY created_at,id""", request_id)
         return {"header": header, "items": items, "approvals": approvals, "history": cur.fetchall()}
     finally:
@@ -188,9 +189,9 @@ def index():
     try:
         cur = conn.cursor()
         cur.execute("""SELECT TOP (30) r.id,r.request_no,r.request_date_fa,r.request_type,r.unit_name,r.status,r.created_at
-                       FROM purchase.requests r
+                       FROM Project.requests r
                        WHERE r.requester_username=? OR EXISTS
-                         (SELECT 1 FROM purchase.approvals a WHERE a.request_id=r.id AND a.approver_username=?)
+                         (SELECT 1 FROM Project.approvals a WHERE a.request_id=r.id AND a.approver_username=?)
                        ORDER BY r.id DESC""", current_user.username, current_user.username)
         return render_template("index.html", rows=cur.fetchall(), username=current_user.username)
     finally:
@@ -245,7 +246,7 @@ def new_request():
             cur.execute("SELECT GETDATE()")
             now = cur.fetchone()[0]
             jalali = jdatetime.datetime.fromgregorian(datetime=now).strftime("%Y/%m/%d")
-            cur.execute("""INSERT INTO purchase.requests
+            cur.execute("""INSERT INTO Project.requests
                 (request_date,request_date_fa,request_type,unit_name,supply_location,fixed_asset,
                  request_reason,requester_username,status)
                 OUTPUT INSERTED.id VALUES (?,?,?,?,?,?,?,?,'pending')""",
@@ -253,22 +254,22 @@ def new_request():
                 reason or None, current_user.username)
             request_id = cur.fetchone()[0]
             request_no = f"PR-{jalali.replace('/', '')}-{request_id:06d}"
-            cur.execute("UPDATE purchase.requests SET request_no=? WHERE id=?", request_no, request_id)
+            cur.execute("UPDATE Project.requests SET request_no=? WHERE id=?", request_no, request_id)
             for item in items:
-                cur.execute("""INSERT INTO purchase.request_items
+                cur.execute("""INSERT INTO Project.request_items
                     (request_id,line_no,item_code,item_description,unit_name,quantity,needed_date_fa,usage_location)
                     VALUES (?,?,?,?,?,?,?,?)""", request_id, *item)
-            cur.execute("""INSERT INTO purchase.approvals(request_id,step_no,approver_username,approver_title,decision)
+            cur.execute("""INSERT INTO Project.approvals(request_id,step_no,approver_username,approver_title,decision)
                 SELECT ?,step_no,approver_username,approver_title,'waiting'
-                FROM purchase.approval_routes WHERE request_type=? AND is_active=1""", request_id, request_type)
-            cur.execute("""INSERT INTO purchase.request_history(request_id,action_name,actor_username,details)
+                FROM Project.approval_routes WHERE request_type=? AND is_active=1""", request_id, request_type)
+            cur.execute("""INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
                 VALUES (?,N'ثبت درخواست',?,N'درخواست خرید ایجاد شد.')""", request_id, current_user.username)
-            cur.execute("SELECT TOP (1) id FROM purchase.approvals WHERE request_id=? ORDER BY step_no", request_id)
+            cur.execute("SELECT TOP (1) id FROM Project.approvals WHERE request_id=? ORDER BY step_no", request_id)
             first_approval = cur.fetchone()
             if first_approval:
-                cur.execute("UPDATE purchase.approvals SET decision='pending' WHERE id=?", first_approval[0])
+                cur.execute("UPDATE Project.approvals SET decision='pending' WHERE id=?", first_approval[0])
             else:
-                cur.execute("UPDATE purchase.requests SET status='submitted' WHERE id=?", request_id)
+                cur.execute("UPDATE Project.requests SET status='submitted' WHERE id=?", request_id)
             conn.commit()
             flash(f"درخواست {request_no} با موفقیت ثبت شد.", "success")
             if not first_approval:
@@ -306,28 +307,28 @@ def decide_request(request_id):
         conn = data_db()
         conn.autocommit = False
         cur = conn.cursor()
-        cur.execute("""SELECT TOP (1) id FROM purchase.approvals
+        cur.execute("""SELECT TOP (1) id FROM Project.approvals
                        WHERE request_id=? AND approver_username=? AND decision='pending'""",
                     request_id, current_user.username)
         approval = cur.fetchone()
         if not approval:
             conn.rollback()
             abort(403)
-        cur.execute("""UPDATE purchase.approvals SET decision=?,comment=?,decided_at=GETDATE()
+        cur.execute("""UPDATE Project.approvals SET decision=?,comment=?,decided_at=GETDATE()
                        WHERE id=? AND decision='pending'""", decision, comment or None, approval[0])
         if decision == "rejected":
             status = "rejected"
         else:
-            cur.execute("""SELECT TOP (1) id FROM purchase.approvals
+            cur.execute("""SELECT TOP (1) id FROM Project.approvals
                            WHERE request_id=? AND decision='waiting' ORDER BY step_no""", request_id)
             next_approval = cur.fetchone()
             if next_approval:
-                cur.execute("UPDATE purchase.approvals SET decision='pending' WHERE id=?", next_approval[0])
+                cur.execute("UPDATE Project.approvals SET decision='pending' WHERE id=?", next_approval[0])
                 status = "pending"
             else:
                 status = "approved"
-        cur.execute("UPDATE purchase.requests SET status=?,updated_at=GETDATE() WHERE id=?", status, request_id)
-        cur.execute("""INSERT INTO purchase.request_history(request_id,action_name,actor_username,details)
+        cur.execute("UPDATE Project.requests SET status=?,updated_at=GETDATE() WHERE id=?", status, request_id)
+        cur.execute("""INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
                        VALUES (?,?,?,?)""", request_id,
                     "تأیید" if decision == "approved" else "رد درخواست", current_user.username, comment or None)
         conn.commit()
