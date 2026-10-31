@@ -1,11 +1,58 @@
-{% extends "base.html" %}{% block title %}جزئیات درخواست | پادرا{% endblock %}{% block content %}
-{% set h=data.header %}<section class="page-head no-print"><div><span class="eyebrow blue">REQUEST DETAILS</span><h1>جزئیات درخواست خرید</h1><p>{{h[1]}}</p></div><div class="head-actions"><button class="btn secondary" onclick="window.print()">چاپ فرم</button><a class="btn secondary" href="{{url_for('index')}}">بازگشت</a></div></section>
-<section class="paper panel print-paper"><div class="paper-head"><div class="paper-meta"><b>شرکت پادرا</b><span>شماره فرم: PDR-PR-001</span><span>گروه صنعتی سرکان</span></div><div class="paper-title"><h2>فرم درخواست خرید</h2><b>شرکت پادرا</b></div><div class="paper-logo"><span class="brand-symbol large">P</span><b>پادرا</b></div></div>
-<div class="paper-date"><span>شماره درخواست: <strong>{{h[1]}}</strong></span><span>تاریخ درخواست: <strong>{{h[2]}}</strong></span><span>وضعیت: <strong>{{{'pending':'در انتظار تأیید','submitted':'ثبت‌شده / بدون مسیر تأیید','approved':'تأیید نهایی','rejected':'رد شده'}[h[9]]}}</strong></span></div>
-<div class="section-caption">مشخصات درخواست</div><div class="detail-grid"><div><small>نوع اقلام</small><b>{{{'goods':'مواد اولیه','service':'خدمات','equipment':'تجهیزات و قطعات','other':'سایر'}[h[3]]}}</b></div><div><small>واحد درخواست‌کننده</small><b>{{h[4]}}</b></div><div><small>محل تأمین</small><b>{{h[5]}}</b></div><div><small>دارایی ثابت</small><b>{{'بله' if h[6] else 'خیر'}}</b></div><div class="span-all"><small>توضیحات</small><b>{{h[7] or '—'}}</b></div></div>
-<div class="section-caption">اقلام درخواستی</div><div class="table-wrap"><table class="items-table"><thead><tr><th>ردیف</th><th>کد کالا</th><th>شرح کالا / خدمت</th><th>واحد</th><th>مقدار</th><th>تاریخ نیاز</th><th>محل مصرف</th></tr></thead><tbody>{% for x in data.items %}<tr><td>{{x[0]}}</td><td>{{x[1] or '—'}}</td><td>{{x[2]}}</td><td>{{x[3]}}</td><td>{{x[4]}}</td><td>{{x[5]}}</td><td>{{x[6]}}</td></tr>{% endfor %}</tbody></table></div>
-<div class="section-caption">گردش تأیید</div><div class="approval-grid">{% for a in data.approvals %}<div class="approval-box"><b>{{a[2]}}</b><span>{{a[1]}}</span><strong>{{{'waiting':'در انتظار','pending':'در حال بررسی','approved':'تأیید شد','rejected':'رد شد'}.get(a[3],a[3])}}</strong><small>{{a[5].strftime('%Y/%m/%d %H:%M') if a[5] else 'تاریخ و امضا'}}</small>{% if a[4] %}<small>{{a[4]}}</small>{% endif %}</div>{% else %}<div class="empty-inline">مسیر تأیید برای این نوع درخواست تعریف نشده است.</div>{% endfor %}</div>
-<div class="signature-grid"><div class="signature"><b>درخواست‌کننده</b><span>{{h[8]}}</span><small>ثبت سیستمی</small></div><div class="signature"><b>مدیرعامل شرکت</b><span>مطابق گردش تأیید</span><small>تاریخ و امضا</small></div><div class="signature"><b>مدیریت گروه</b><span>در صورت نیاز سازمان</span><small>تاریخ و امضا</small></div></div>
-{% if h[9]=='pending' %}{% for a in data.approvals if a[1]==username and a[3]=='pending' %}<div class="decision-panel no-print"><h3>اقدام موردنیاز شما · {{a[2]}}</h3><form method="post" action="{{url_for('decide_request',request_id=h[0])}}"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><textarea name="comment" rows="2" placeholder="توضیح یا نظر (اختیاری)"></textarea><div class="form-actions"><button class="btn primary" name="decision" value="approved">تأیید درخواست</button><button class="btn danger" name="decision" value="rejected">رد درخواست</button></div></form></div>{% endfor %}{% endif %}
-<div class="history no-print"><h3>سوابق عملیات</h3>{% for item in data.history %}<div><b>{{item[0]}}</b><span>{{item[1]}} · {{item[3].strftime('%Y/%m/%d %H:%M')}}</span>{% if item[2] %}<p>{{item[2]}}</p>{% endif %}</div>{% endfor %}</div>
-</section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}پیگیری درخواست {{data.header[1]}} | پادرا{% endblock %}
+{% block content %}
+{% set h=data.header %}
+{% set ns=namespace(current=None,done=0) %}
+{% for a in data.approvals %}
+  {% if a[3]=='pending' %}{% set ns.current=a %}{% endif %}
+  {% if a[3]=='approved' %}{% set ns.done=ns.done+1 %}{% endif %}
+{% endfor %}
+<section class="page-head no-print">
+  <div><span class="eyebrow blue">REQUEST DETAILS / AUDIT TRAIL</span><h1>پیگیری درخواست خرید</h1><p>{{h[1]}} · ثبت‌کننده: {{h[8]}}</p></div>
+  <div class="head-actions"><button class="btn secondary" onclick="window.print()">چاپ فرم</button><a class="btn secondary" href="{{url_for('index')}}">بازگشت به داشبورد</a></div>
+</section>
+
+<section class="panel tracking-overview no-print">
+  <div class="overview-top">
+    <div><small>وضعیت فعلی درخواست</small><h2>{{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}</h2><span class="request-no">{{h[1]}}</span></div>
+    <div class="overview-dates"><span>تاریخ ثبت <b>{{h[10].strftime('%Y/%m/%d %H:%M') if h[10] else h[2]}}</b></span><span>آخرین به‌روزرسانی <b>{{h[11].strftime('%Y/%m/%d %H:%M') if h[11] else '—'}}</b></span></div>
+  </div>
+  {% if h[9]=='pending' and ns.current %}
+    <div class="current-action"><span class="pulse-dot"></span><div><small>در حال حاضر منتظر اقدام این شخص است</small><b>{{ns.current[2]}} · {{ns.current[1]}}</b></div><span class="step-pill">مرحله {{ns.current[0]}} از {{data.approvals|length}}</span></div>
+  {% elif h[9]=='submitted' %}
+    <div class="current-action warning-action"><span>!</span><div><small>اقدام لازم</small><b>برای این نوع درخواست هنوز مسیر تأیید تعریف نشده است.</b></div></div>
+  {% elif h[9]=='approved' %}
+    <div class="current-action success-action"><span>✓</span><div><small>گردش کار تکمیل شد</small><b>تمام مراحل تأیید با موفقیت انجام شده است.</b></div></div>
+  {% elif h[9]=='rejected' %}
+    <div class="current-action rejected-action"><span>×</span><div><small>گردش کار متوقف شده</small><b>در یکی از مراحل، درخواست رد شده است.</b></div></div>
+  {% endif %}
+  {% if data.approvals %}
+  <div class="progress-head"><b>پیشرفت گردش تأیید</b><span>{{ns.done}} از {{data.approvals|length}} مرحله تأیید شده</span></div>
+  <div class="progress-track"><span style="width:{{(ns.done * 100 / (data.approvals|length))|round(0)}}%"></span></div>
+  {% endif %}
+</section>
+
+<section class="paper panel print-paper">
+  <div class="paper-head"><div class="paper-meta"><b>شرکت پادرا</b><span>شماره فرم: PDR-PR-001</span><span>گروه صنعتی سرکان</span></div><div class="paper-title"><h2>فرم درخواست خرید</h2><b>شرکت پادرا</b></div><div class="paper-logo"><span class="brand-symbol large">P</span><b>پادرا</b></div></div>
+  <div class="paper-date"><span>شماره درخواست: <strong>{{h[1]}}</strong></span><span>تاریخ درخواست: <strong>{{h[2]}}</strong></span><span>وضعیت: <strong>{{{'pending':'در جریان تأیید','submitted':'بدون مسیر تأیید','approved':'تأیید نهایی','rejected':'رد شده'}.get(h[9],h[9])}}</strong></span></div>
+  <div class="section-caption">مشخصات درخواست</div>
+  <div class="detail-grid"><div><small>نوع اقلام</small><b>{{{'goods':'مواد اولیه','service':'خدمات','equipment':'تجهیزات و قطعات','other':'سایر'}.get(h[3],h[3])}}</b></div><div><small>واحد درخواست‌کننده</small><b>{{h[4]}}</b></div><div><small>محل تأمین</small><b>{{h[5]}}</b></div><div><small>دارایی ثابت</small><b>{{'بله' if h[6] else 'خیر'}}</b></div><div><small>درخواست‌کننده</small><b>{{h[8]}}</b></div><div class="span-all"><small>توضیحات</small><b>{{h[7] or '—'}}</b></div></div>
+  <div class="section-caption">اقلام درخواستی</div>
+  <div class="table-wrap"><table class="items-table"><thead><tr><th>ردیف</th><th>کد کالا</th><th>شرح کالا / خدمت</th><th>واحد</th><th>مقدار</th><th>تاریخ نیاز</th><th>محل مصرف</th></tr></thead><tbody>{% for x in data.items %}<tr><td>{{x[0]}}</td><td>{{x[1] or '—'}}</td><td>{{x[2]}}</td><td>{{x[3]}}</td><td>{{x[4]}}</td><td>{{x[5]}}</td><td>{{x[6]}}</td></tr>{% endfor %}</tbody></table></div>
+  <div class="section-caption">مراحل گردش تأیید</div>
+  <div class="approval-grid">{% for a in data.approvals %}<div class="approval-box {% if a[3]=='approved' %}approval-done{% elif a[3]=='pending' %}approval-current{% elif a[3]=='rejected' %}approval-rejected{% endif %}"><div class="approval-step">مرحله {{a[0]}}</div><b>{{a[2]}}</b><span>{{a[1]}}</span><strong>{{{'waiting':'در صف انتظار','pending':'در حال بررسی','approved':'تأیید شد','rejected':'رد شد'}.get(a[3],a[3])}}</strong><small>{{a[5].strftime('%Y/%m/%d %H:%M') if a[5] else 'هنوز اقدامی ثبت نشده'}}</small>{% if a[4] %}<small class="approval-comment">{{a[4]}}</small>{% endif %}</div>{% else %}<div class="empty-inline">مسیر تأیید برای این نوع درخواست تعریف نشده است.</div>{% endfor %}</div>
+  <div class="signature-grid"><div class="signature"><b>درخواست‌کننده</b><span>{{h[8]}}</span><small>ثبت سیستمی</small></div><div class="signature"><b>مدیرعامل شرکت</b><span>مطابق گردش تأیید</span><small>تاریخ و امضا</small></div><div class="signature"><b>مدیریت گروه</b><span>در صورت نیاز سازمان</span><small>تاریخ و امضا</small></div></div>
+  {% if h[9]=='pending' %}{% for a in data.approvals if a[1]==username and a[3]=='pending' %}
+  <div class="decision-panel no-print"><h3>اقدام موردنیاز شما · {{a[2]}}</h3><p>لطفاً پیش از ثبت تصمیم، در صورت نیاز توضیحات خود را درج کنید. تصمیم ثبت‌شده در تاریخچه درخواست باقی می‌ماند.</p><form method="post" action="{{url_for('decide_request',request_id=h[0])}}"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><textarea name="comment" rows="2" maxlength="1000" placeholder="توضیح یا نظر (اختیاری)"></textarea><div class="form-actions"><button class="btn primary" name="decision" value="approved">✓ تأیید درخواست</button><button class="btn danger" name="decision" value="rejected">× رد درخواست</button></div></form></div>
+  {% endfor %}{% endif %}
+</section>
+
+<section class="panel history-panel no-print">
+  <div class="panel-head"><div><h2>تاریخچه و ردپای عملیات</h2><p>تمام رویدادهای ثبت‌شده برای این درخواست به ترتیب زمان</p></div><span class="count">{{data.history|length}} رویداد</span></div>
+  {% if data.history %}
+  <div class="timeline">{% for item in data.history %}
+    <article class="timeline-item"><span class="timeline-marker"></span><div class="timeline-content"><div class="timeline-title"><b>{{item[0]}}</b><time>{{item[3].strftime('%Y/%m/%d · %H:%M') if item[3] else ''}}</time></div><div class="timeline-actor">ثبت‌کننده رویداد: {{'سامانه' if item[1]=='SYSTEM' else item[1]}}</div>{% if item[2] %}<p>{{item[2]}}</p>{% endif %}</div></article>
+  {% endfor %}</div>
+  {% else %}<div class="empty-inline">هنوز رویدادی در تاریخچه این درخواست ثبت نشده است.</div>{% endif %}
+</section>
+{% endblock %}
