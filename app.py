@@ -188,12 +188,56 @@ def index():
     conn = data_db()
     try:
         cur = conn.cursor()
-        cur.execute("""SELECT TOP (30) r.id,r.request_no,r.request_date_fa,r.request_type,r.unit_name,r.status,r.created_at
+        status_filter = request.args.get("status", "").strip()
+        search_text = request.args.get("q", "").strip()[:80]
+        allowed_statuses = {"pending", "submitted", "approved", "rejected"}
+        if status_filter not in allowed_statuses:
+            status_filter = ""
+        where = """(r.requester_username=? OR EXISTS
+                    (SELECT 1 FROM Project.approvals ax
+                     WHERE ax.request_id=r.id AND ax.approver_username=?))"""
+        params = [current_user.username, current_user.username]
+        if status_filter:
+            where += " AND r.status=?"
+            params.append(status_filter)
+        if search_text:
+            where += """ AND (r.request_no LIKE ? OR r.unit_name LIKE ?
+                         OR r.requester_username LIKE ? OR r.request_reason LIKE ?)"""
+            like = f"%{search_text}%"
+            params.extend([like, like, like, like])
+        cur.execute(f"""SELECT TOP (100)
+                            r.id,r.request_no,r.request_date_fa,r.request_type,r.unit_name,
+                            r.status,r.created_at,r.requester_username,r.updated_at,
+                            COALESCE(p.approver_username,N'') AS current_approver,
+                            COALESCE(p.approver_title,N'') AS current_title,
+                            COALESCE(p.step_no,0) AS current_step,
+                            COALESCE(st.total_steps,0) AS total_steps,
+                            COALESCE(it.item_count,0) AS item_count
                        FROM Project.requests r
-                       WHERE r.requester_username=? OR EXISTS
-                         (SELECT 1 FROM Project.approvals a WHERE a.request_id=r.id AND a.approver_username=?)
-                       ORDER BY r.id DESC""", current_user.username, current_user.username)
-        return render_template("index.html", rows=cur.fetchall(), username=current_user.username)
+                       OUTER APPLY (
+                           SELECT TOP (1) a.approver_username,a.approver_title,a.step_no
+                           FROM Project.approvals a
+                           WHERE a.request_id=r.id AND a.decision='pending'
+                           ORDER BY a.step_no
+                       ) p
+                       OUTER APPLY (
+                           SELECT COUNT(*) AS total_steps
+                           FROM Project.approvals a WHERE a.request_id=r.id
+                       ) st
+                       OUTER APPLY (
+                           SELECT COUNT(*) AS item_count
+                           FROM Project.request_items i WHERE i.request_id=r.id
+                       ) it
+                       WHERE {where}
+                       ORDER BY r.id DESC""", *params)
+        rows = cur.fetchall()
+        counts = {key: 0 for key in ("all", "pending", "submitted", "approved", "rejected")}
+        for row in rows:
+            counts["all"] += 1
+            if row[5] in counts:
+                counts[row[5]] += 1
+        return render_template("index.html", rows=rows, username=current_user.username,
+                               counts=counts, status_filter=status_filter, search_text=search_text)
     finally:
         conn.close()
 
@@ -264,10 +308,14 @@ def new_request():
                 FROM Project.approval_routes WHERE request_type=? AND is_active=1""", request_id, request_type)
             cur.execute("""INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
                 VALUES (?,N'ثبت درخواست',?,N'درخواست خرید ایجاد شد.')""", request_id, current_user.username)
-            cur.execute("SELECT TOP (1) id FROM Project.approvals WHERE request_id=? ORDER BY step_no", request_id)
+            cur.execute("""SELECT TOP (1) id,step_no,approver_username,approver_title
+                           FROM Project.approvals WHERE request_id=? ORDER BY step_no""", request_id)
             first_approval = cur.fetchone()
             if first_approval:
                 cur.execute("UPDATE Project.approvals SET decision='pending' WHERE id=?", first_approval[0])
+                cur.execute("""INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+                               VALUES (?,N'ارجاع برای تأیید',?,?)""", request_id, current_user.username,
+                            f"درخواست برای مرحله {first_approval[1]} به {first_approval[3]} ({first_approval[2]}) ارجاع شد.")
             else:
                 cur.execute("UPDATE Project.requests SET status='submitted' WHERE id=?", request_id)
             conn.commit()
@@ -328,9 +376,25 @@ def decide_request(request_id):
             else:
                 status = "approved"
         cur.execute("UPDATE Project.requests SET status=?,updated_at=GETDATE() WHERE id=?", status, request_id)
+        cur.execute("""SELECT step_no,approver_title FROM Project.approvals WHERE id=?""", approval[0])
+        decided_step = cur.fetchone()
+        decision_title = "تأیید مرحله" if decision == "approved" else "رد درخواست در مرحله"
+        details = f"{decision_title} {decided_step[0]} · {decided_step[1]}"
+        if comment:
+            details += f" — توضیح: {comment}"
         cur.execute("""INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
                        VALUES (?,?,?,?)""", request_id,
-                    "تأیید" if decision == "approved" else "رد درخواست", current_user.username, comment or None)
+                    "تأیید" if decision == "approved" else "رد درخواست", current_user.username, details)
+        if decision == "approved" and next_approval:
+            cur.execute("""SELECT step_no,approver_username,approver_title
+                           FROM Project.approvals WHERE id=?""", next_approval[0])
+            next_step = cur.fetchone()
+            cur.execute("""INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+                           VALUES (?,N'ارجاع به مرحله بعد',N'SYSTEM',?)""", request_id,
+                        f"درخواست به مرحله {next_step[0]} ارجاع شد: {next_step[2]} ({next_step[1]}).")
+        elif decision == "approved":
+            cur.execute("""INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+                           VALUES (?,N'تکمیل گردش تأیید',N'SYSTEM',N'تمام مراحل تأیید با موفقیت تکمیل شد.')""", request_id)
         conn.commit()
         flash("نظر شما ثبت شد.", "success")
     except HTTPException:
