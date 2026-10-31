@@ -23,31 +23,44 @@ login_manager.login_message_category = "warning"
 
 
 def conn_string(auth=False):
-    # Original SQL Server connection settings restored.
-    server = r'192.168.120.38\odsm'
-    database = 'bi'
-    user = 'p_ehteshamzadeh'
-    password = 'PeMeh-4967!'
-    driver = 'ODBC Driver 17 for SQL Server'
-    parts = [
-        f'DRIVER={{{driver}}}',
-        f'SERVER={server}',
-        f'DATABASE={database}',
-        'Encrypt=no',
-        'TrustServerCertificate=yes',
-        f'UID={user}',
-        f'PWD={password}'
-    ]
-    return ';'.join(parts) + ';'
+    """Build a SQL Server connection string using the project's .env settings.
 
+    AUTH connects to the organizational login database (bi).
+    DATA connects to the purchase-request database (sigd).
+    """
+    prefix = "AUTH_DB_" if auth else "DATA_DB_"
+    server = os.getenv(prefix + "SERVER", r"192.168.120.38\\odsm")
+    database = os.getenv(prefix + "NAME", "bi" if auth else "sigd")
+    driver = os.getenv(prefix + "DRIVER", "ODBC Driver 17 for SQL Server")
+    user = os.getenv(prefix + "USER", "")
+    password = os.getenv(prefix + "PASSWORD", "")
+    encrypt = os.getenv(prefix + "ENCRYPT", "no")
+    trust_certificate = os.getenv(prefix + "TRUST_SERVER_CERTIFICATE", "yes")
+
+    parts = [
+        f"DRIVER={{{driver}}}",
+        f"SERVER={server}",
+        f"DATABASE={database}",
+        f"Encrypt={encrypt}",
+        f"TrustServerCertificate={trust_certificate}",
+    ]
+    if user:
+        parts.extend([f"UID={user}", f"PWD={password}"])
+    else:
+        parts.append("Trusted_Connection=yes")
+    return ";".join(parts) + ";"
+
+
+def db_connect(auth=False):
+    return pyodbc.connect(conn_string(auth), timeout=8)
 
 
 def auth_db():
-    return pyodbc.connect(connection_string("AUTH"), timeout=8)
+    return db_connect(auth=True)
 
 
 def data_db():
-    return pyodbc.connect(connection_string("DATA"), timeout=8)
+    return db_connect(auth=False)
 
 
 def normalize_digits(value):
