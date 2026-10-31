@@ -159,8 +159,37 @@ BEGIN
     SET @role_id=SCOPE_IDENTITY();
 END;
 
-IF NOT EXISTS(SELECT 1 FROM Project.IAM_RolePermissions WHERE role_id=@role_id AND permission_id=@permission_id)
-    INSERT Project.IAM_RolePermissions(role_id,permission_id) VALUES(@role_id,@permission_id);
+/* Seed the first set of central administration permissions. */
+DECLARE @admin_permissions TABLE(
+    permission_code NVARCHAR(160),
+    permission_name NVARCHAR(150),
+    action_code NVARCHAR(60),
+    description NVARCHAR(500)
+);
+INSERT @admin_permissions VALUES
+(N'iam.admin.access',N'ورود به مدیریت مرکزی',N'access',N'اجازه ورود به پنل مدیریت مرکزی IAM'),
+(N'iam.users.manage',N'مدیریت کاربران',N'manage_users',N'مشاهده و مدیریت وضعیت و نقش‌های کاربران'),
+(N'iam.projects.manage',N'مدیریت پروژه‌ها',N'manage_projects',N'تعریف و مدیریت پروژه‌ها و ماژول‌ها'),
+(N'iam.roles.manage',N'مدیریت نقش‌ها',N'manage_roles',N'ایجاد نقش و تخصیص مجوز به نقش'),
+(N'iam.permissions.manage',N'مدیریت مجوزها',N'manage_permissions',N'تعریف و مدیریت مجوزهای پروژه‌ها'),
+(N'iam.audit.view',N'مشاهده گزارش رویدادها',N'view_audit',N'مشاهده سوابق تغییرات و فعالیت‌های IAM');
+
+INSERT Project.IAM_Permissions(module_id,permission_code,permission_name,action_code,description)
+SELECT @module_id,s.permission_code,s.permission_name,s.action_code,s.description
+FROM @admin_permissions s
+WHERE NOT EXISTS(
+    SELECT 1 FROM Project.IAM_Permissions p WHERE p.permission_code=s.permission_code
+);
+
+SELECT @role_id=id FROM Project.IAM_Roles WHERE project_id IS NULL AND role_code=N'iam_superadmin';
+INSERT Project.IAM_RolePermissions(role_id,permission_id)
+SELECT @role_id,p.id
+FROM Project.IAM_Permissions p
+WHERE p.permission_code LIKE N'iam.%'
+  AND NOT EXISTS(
+      SELECT 1 FROM Project.IAM_RolePermissions rp
+      WHERE rp.role_id=@role_id AND rp.permission_id=p.id
+  );
 
 COMMIT TRANSACTION;
 GO
