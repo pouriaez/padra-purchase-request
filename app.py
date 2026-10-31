@@ -32,22 +32,28 @@ def conn_string(auth=False):
     server = os.getenv(prefix + "SERVER", r"192.168.120.38\odsm")
     database = os.getenv(prefix + "NAME", "bi" if auth else "sigd")
     driver = os.getenv(prefix + "DRIVER", "ODBC Driver 17 for SQL Server")
-    user = os.getenv(prefix + "USER", "")
+    user = os.getenv(prefix + "USER", "").strip()
     password = os.getenv(prefix + "PASSWORD", "")
     encrypt = os.getenv(prefix + "ENCRYPT", "no")
     trust_certificate = os.getenv(prefix + "TRUST_SERVER_CERTIFICATE", "yes")
+
+    # Match productionplan_padra1: SQL Server Authentication only.
+    # Never silently fall back to the current Windows account.
+    if not user or not password:
+        raise RuntimeError(
+            f"{prefix}USER and {prefix}PASSWORD must be configured in .env; "
+            "Windows/Trusted_Connection authentication is disabled."
+        )
 
     parts = [
         f"DRIVER={{{driver}}}",
         f"SERVER={server}",
         f"DATABASE={database}",
+        f"UID={user}",
+        f"PWD={password}",
         f"Encrypt={encrypt}",
         f"TrustServerCertificate={trust_certificate}",
     ]
-    if user:
-        parts.extend([f"UID={user}", f"PWD={password}"])
-    else:
-        parts.append("Trusted_Connection=yes")
     return ";".join(parts) + ";"
 
 
