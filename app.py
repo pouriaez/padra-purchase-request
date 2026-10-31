@@ -136,7 +136,7 @@ def get_request(request_id):
     try:
         cur = conn.cursor()
         cur.execute("""SELECT id, request_no, request_date_fa, request_type, unit_name, supply_location,
-                              fixed_asset, request_reason, requester_username, status
+                              fixed_asset, request_reason, requester_username, status, created_at, updated_at
                        FROM Project.requests WHERE id=?""", request_id)
         header = cur.fetchone()
         if not header: return None
