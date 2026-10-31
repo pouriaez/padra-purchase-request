@@ -29,7 +29,7 @@ def conn_string(auth=False):
     DATA connects to the purchase-request database (sigd).
     """
     prefix = "AUTH_DB_" if auth else "DATA_DB_"
-    server = os.getenv(prefix + "SERVER", r"192.168.120.38\\odsm")
+    server = os.getenv(prefix + "SERVER", r"192.168.120.38\odsm")
     database = os.getenv(prefix + "NAME", "bi" if auth else "sigd")
     driver = os.getenv(prefix + "DRIVER", "ODBC Driver 17 for SQL Server")
     user = os.getenv(prefix + "USER", "")
