@@ -193,9 +193,19 @@ def index():
         allowed_statuses = {"pending", "submitted", "approved", "rejected"}
         if status_filter not in allowed_statuses:
             status_filter = ""
-        where = """(r.requester_username=? OR EXISTS
-                    (SELECT 1 FROM Project.approvals ax
-                     WHERE ax.request_id=r.id AND ax.approver_username=?))"""
+        visibility = """(r.requester_username=? OR EXISTS
+                         (SELECT 1 FROM Project.approvals ax
+                          WHERE ax.request_id=r.id AND ax.approver_username=?))"""
+        cur.execute(f"""SELECT r.status,COUNT(*) FROM Project.requests r
+                        WHERE {visibility} GROUP BY r.status""",
+                    current_user.username, current_user.username)
+        counts = {key: 0 for key in ("all", "pending", "submitted", "approved", "rejected")}
+        for status_name, total in cur.fetchall():
+            counts["all"] += total
+            if status_name in counts:
+                counts[status_name] = total
+
+        where = visibility
         params = [current_user.username, current_user.username]
         if status_filter:
             where += " AND r.status=?"
@@ -231,11 +241,6 @@ def index():
                        WHERE {where}
                        ORDER BY r.id DESC""", *params)
         rows = cur.fetchall()
-        counts = {key: 0 for key in ("all", "pending", "submitted", "approved", "rejected")}
-        for row in rows:
-            counts["all"] += 1
-            if row[5] in counts:
-                counts[row[5]] += 1
         return render_template("index.html", rows=rows, username=current_user.username,
                                counts=counts, status_filter=status_filter, search_text=search_text)
     finally:
