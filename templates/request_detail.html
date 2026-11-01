@@ -1,58 +1,391 @@
 {% extends "base.html" %}
-{% block title %}پیگیری درخواست {{data.header[1]}} | پادرا{% endblock %}
+{% block title %}پرونده درخواست {{data.header[1]}} | شرکت پادرا{% endblock %}
 {% block content %}
 {% set h=data.header %}
+{% set req_creator = user_info(h[8]) %}
 {% set ns=namespace(current=None,done=0) %}
 {% for a in data.approvals %}
-  {% if a[3]=='pending' %}{% set ns.current=a %}{% endif %}
+  {% if a[3]=='pending' and not ns.current %}{% set ns.current=a %}{% endif %}
   {% if a[3]=='approved' %}{% set ns.done=ns.done+1 %}{% endif %}
 {% endfor %}
+
 <section class="page-head no-print">
-  <div><span class="eyebrow blue">REQUEST DETAILS / AUDIT TRAIL</span><h1>پیگیری درخواست خرید</h1><p>{{h[1]}} · ثبت‌کننده: {{h[8]}}</p></div>
-  <div class="head-actions"><button class="btn secondary" onclick="window.print()">چاپ فرم</button><a class="btn secondary" href="{{url_for('index')}}">بازگشت به داشبورد</a></div>
+  <div>
+    <span class="eyebrow blue">PADRA & SERKAN PROCUREMENT FILE / AUDIT TRAIL</span>
+    <h1>پرونده پیگیری و گردش کار درخواست خرید</h1>
+    <p>شماره درخواست: <b>{{h[1]}}</b> · ثبت‌کننده: <b>{{req_creator.full_name}} ({{req_creator.role_title}})</b></p>
+  </div>
+  <div class="head-actions">
+    <button class="btn secondary" onclick="window.print()">🖨 چاپ رسمی فرم (A4)</button>
+    <a class="btn secondary" href="{{url_for('index')}}">بازگشت به داشبورد</a>
+  </div>
 </section>
 
 <section class="panel tracking-overview no-print">
   <div class="overview-top">
-    <div><small>وضعیت فعلی درخواست</small><h2>{{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}</h2><span class="request-no">{{h[1]}}</span></div>
-    <div class="overview-dates"><span>تاریخ ثبت <b>{{h[10].strftime('%Y/%m/%d %H:%M') if h[10] else h[2]}}</b></span><span>آخرین به‌روزرسانی <b>{{h[11].strftime('%Y/%m/%d %H:%M') if h[11] else '—'}}</b></span></div>
+    <div>
+      <small>وضعیت جاری در زنجیره تأمین شرکت پادرا ← گروه صنعتی سرکان</small>
+      <h2>
+        {% if h[9]=='pending' and ns.current %}
+          {% if ns.current[0]==1 %}
+            مرحله ۱: در انتظار بررسی و تأیید مدیرعامل شرکت پادرا
+          {% elif ns.current[0]==2 %}
+            مرحله ۲: تأییدشده توسط مدیرعامل پادرا · منتظر ارجاع مدیر خرید داخلی سرکان به کارشناس خرید
+          {% else %}
+            مرحله ۳: محول‌شده به کارشناس خرید سرکان جهت استعلام و سفارش‌گذاری
+          {% endif %}
+        {% else %}
+          {{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}
+        {% endif %}
+      </h2>
+      <span class="request-no">{{h[1]}}</span>
+    </div>
+    <div class="overview-dates">
+      <span>تاریخ ثبت در پادرا <b>{{h[10].strftime('%Y/%m/%d %H:%M') if h[10] else h[2]}}</b></span>
+      <span>آخرین اقدام <b>{{h[11].strftime('%Y/%m/%d %H:%M') if h[11] else '—'}}</b></span>
+    </div>
   </div>
+
+  <!-- Visual 4-Node Stepper -->
+  <div class="visual-stepper">
+    <div class="v-step done">
+      <div class="v-circle">✓</div>
+      <div class="v-meta">
+        <small>گام آغازین · پادرا</small>
+        <b>{{req_creator.full_name}}</b>
+        <span>ثبت درخواست خرید</span>
+      </div>
+    </div>
+    {% for a in data.approvals %}
+      <div class="v-step {% if a[3]=='approved' %}done{% elif a[3]=='pending' %}current{% elif a[3]=='rejected' %}rejected{% else %}waiting{% endif %}">
+        <div class="v-circle">
+          {% if a[3]=='approved' %}✓{% elif a[3]=='rejected' %}×{% else %}{{a[0]}}{% endif %}
+        </div>
+        <div class="v-meta">
+          <small>
+            {% if a[0]==1 %}مرحله ۱ · تأیید پادرا
+            {% elif a[0]==2 %}مرحله ۲ · مدیریت خرید سرکان
+            {% else %}مرحله ۳ · کارشناس خرید سرکان{% endif %}
+          </small>
+          <b>{{a[2]}}</b>
+          <span>
+            {% if a[1]=='UNASSIGNED_SPECIALIST' %}
+              در انتظار انتخاب توسط مدیر خرید
+            {% else %}
+              {{user_info(a[1]).full_name}}
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
   {% if h[9]=='pending' and ns.current %}
-    <div class="current-action"><span class="pulse-dot"></span><div><small>در حال حاضر منتظر اقدام این شخص است</small><b>{{ns.current[2]}} · {{ns.current[1]}}</b></div><span class="step-pill">مرحله {{ns.current[0]}} از {{data.approvals|length}}</span></div>
+    <div class="current-action">
+      <span class="pulse-dot"></span>
+      <div>
+        <small>مسئول اقدام فعلی (مرحله {{ns.current[0]}} از {{data.approvals|length}})</small>
+        <b>{{ns.current[2]}} ({{user_info(ns.current[1]).full_name if ns.current[1] != 'UNASSIGNED_SPECIALIST' else 'در انتظار انتخاب کارشناس'}})</b>
+      </div>
+      {% if ns.current[1] != username and ns.current[1] != 'UNASSIGNED_SPECIALIST' %}
+        <a class="btn secondary small" href="{{url_for('switch_user', username=ns.current[1], next=request.path)}}">
+          ورود به کارتابل این مسئول جهت اقدام ↵
+        </a>
+      {% endif %}
+      <span class="step-pill">مرحله {{ns.current[0]}} از {{data.approvals|length}}</span>
+    </div>
   {% elif h[9]=='submitted' %}
-    <div class="current-action warning-action"><span>!</span><div><small>اقدام لازم</small><b>برای این نوع درخواست هنوز مسیر تأیید تعریف نشده است.</b></div></div>
+    <div class="current-action warning-action">
+      <span>!</span>
+      <div><small>اقدام لازم</small><b>برای این نوع درخواست هنوز مسیر تأیید تعریف نشده است.</b></div>
+    </div>
   {% elif h[9]=='approved' %}
-    <div class="current-action success-action"><span>✓</span><div><small>گردش کار تکمیل شد</small><b>تمام مراحل تأیید با موفقیت انجام شده است.</b></div></div>
+    <div class="current-action success-action">
+      <span>✓</span>
+      <div><small>فرآیند سفارش‌گذاری تکمیل شد</small><b>تأیید مدیرعامل شرکت پادرا، ارجاع مدیر خرید داخلی سرکان و خرید توسط کارشناس مربوطه با موفقیت انجام شده است.</b></div>
+    </div>
   {% elif h[9]=='rejected' %}
-    <div class="current-action rejected-action"><span>×</span><div><small>گردش کار متوقف شده</small><b>در یکی از مراحل، درخواست رد شده است.</b></div></div>
+    <div class="current-action rejected-action">
+      <span>×</span>
+      <div><small>گردش کار متوقف شده</small><b>این درخواست در یکی از مراحل بررسی رد شده است.</b></div>
+    </div>
   {% endif %}
+
   {% if data.approvals %}
-  <div class="progress-head"><b>پیشرفت گردش تأیید</b><span>{{ns.done}} از {{data.approvals|length}} مرحله تأیید شده</span></div>
-  <div class="progress-track"><span style="width:{{(ns.done * 100 / (data.approvals|length))|round(0)}}%"></span></div>
+  <div class="progress-head">
+    <b>پیشرفت زنجیره تأیید و تدارکات (پادرا ← سرکان)</b>
+    <span>{{ns.done}} از {{data.approvals|length}} مرحله تکمیل شده</span>
+  </div>
+  <div class="progress-track">
+    <span style="width:{{(ns.done * 100 / (data.approvals|length))|round(0)}}%"></span>
+  </div>
   {% endif %}
 </section>
 
+{% if h[9]=='pending' and ns.current %}
+  {% set can_act = (ns.current[1] == username) or (username == 'admin') %}
+  {% if can_act %}
+  <section class="panel action-workbench no-print">
+    {% if ns.current[0] == 1 %}
+      <!-- مرحله ۱: پنل مدیرعامل شرکت پادرا -->
+      <div class="workbench-head">
+        <span class="step-badge">اقدام مرحله ۱ از ۳ · شرکت پادرا</span>
+        <h3>پنل بررسی و تصمیم‌گیری مدیرعامل شرکت پادرا</h3>
+        <p>در صورت تأیید جنابعالی، این درخواست به‌صورت خودکار به کارتابل <b>مدیر خرید داخلی گروه صنعتی سرکان</b> جهت تعیین کارشناس خرید و تأمین کالا محول خواهد شد.</p>
+      </div>
+      <form method="post" action="{{url_for('decide_request',request_id=h[0])}}">
+        <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+        <div class="field">
+          <label>هامش / دستور مدیرعامل شرکت پادرا (اختیاری)</label>
+          <textarea name="comment" rows="2" maxlength="1000" placeholder="توضیحات یا اولویت تأمین جهت اطلاع مدیر خرید داخلی گروه صنعتی سرکان..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" name="decision" value="approved">✓ تأیید مدیرعامل پادرا و احاله به مدیر خرید داخلی سرکان</button>
+          <button class="btn danger" name="decision" value="rejected">× رد درخواست خرید</button>
+        </div>
+      </form>
+
+    {% elif ns.current[0] == 2 %}
+      <!-- مرحله ۲: پنل مدیر خرید داخلی گروه صنعتی سرکان (انتخاب و محول‌سازی به کارشناس خرید) -->
+      <div class="workbench-head">
+        <span class="step-badge serkan">اقدام مرحله ۲ از ۳ · مدیریت خرید داخلی گروه صنعتی سرکان</span>
+        <h3>پنل مدیر خرید داخلی سرکان · بررسی و محول‌سازی به کارشناس خرید</h3>
+        <p>این درخواست به تأیید <b>مدیرعامل شرکت پادرا</b> رسیده است. لطفاً با توجه به نوع کالا و بار کاری لحظه‌ای کارشناسان، <b>کارشناس خرید مسئول</b> را انتخاب نموده و دستور خرید را صادر فرمایید.</p>
+      </div>
+      <form method="post" action="{{url_for('decide_request',request_id=h[0])}}">
+        <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+        <div class="specialist-picker-label">انتخاب کارشناس خرید گروه صنعتی سرکان جهت محول‌سازی سفارش *</div>
+        <div class="specialist-cards">
+          {% set ns_rec = namespace(picked=False) %}
+          {% for sp in purchase_specialists %}
+            {% set is_rec = (sp.recommended_for == h[3]) or (h[3] == 'other' and sp.recommended_for == 'service') %}
+            {% set wl = data.bi_stats.specialist_workloads.get(sp.username, {'active': 0, 'completed': 0}) if data.bi_stats else {'active': 0, 'completed': 0} %}
+            <label class="specialist-card {% if is_rec %}recommended-sp{% endif %}">
+              <input type="radio" name="assigned_specialist" value="{{sp.username}}" {% if is_rec and not ns_rec.picked %}{% set ns_rec.picked = True %}checked{% elif loop.first and not is_rec and not ns_rec.picked %}checked{% endif %} required>
+              <div class="sp-card-body">
+                <div class="sp-top">
+                  <b>{{sp.full_name}}</b>
+                  <span class="sp-code">{{sp.username}}</span>
+                </div>
+                <span class="sp-role">{{sp.role_title}}</span>
+                <small class="sp-spec">حوزه تخصصی: {{sp.specialty}}</small>
+                <div class="sp-workload-row">
+                  <span class="wl-badge">پرونده فعال: <b>{{wl.active}}</b></span>
+                  <span class="wl-badge done">تکمیل‌شده: <b>{{wl.completed}}</b></span>
+                  {% if is_rec %}
+                    <span class="rec-badge">★ پیشنهاد هوشمند BI</span>
+                  {% endif %}
+                </div>
+              </div>
+            </label>
+          {% endfor %}
+        </div>
+        <div class="field full-field">
+          <label>دستور خرید و نکات ارجاع مدیر خرید داخلی سرکان به کارشناس منتخب</label>
+          <textarea name="comment" rows="2" maxlength="1000" placeholder="مثلاً: لطفاً ضمن اخذ حداقل ۳ استعلام بها از تأمین‌کنندگان مجاز، حداکثر ظرف ۴۸ ساعت نسبت به خرید اقدام شود..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" name="decision" value="approved">✓ تأیید و محول‌سازی به کارشناس خرید منتخب</button>
+          <button class="btn danger" name="decision" value="rejected">× رد درخواست و اعاده به پادرا</button>
+        </div>
+      </form>
+
+    {% else %}
+      <!-- مرحله ۳: پنل کارشناس خرید منتخب گروه صنعتی سرکان -->
+      <div class="workbench-head">
+        <span class="step-badge specialist">اقدام مرحله ۳ از ۳ · اجرای خرید و سفارش‌گذاری (سرکان)</span>
+        <h3>پنل اقدام کارشناس خرید · {{ns.current[2]}}</h3>
+        <p>این درخواست توسط <b>مدیر خرید داخلی گروه صنعتی سرکان</b> به کارتابل شما محول شده است. پس از انجام استعلام و سفارش‌گذاری، مشخصات خرید را ثبت و پرونده را تکمیل نمایید.</p>
+      </div>
+      <form method="post" action="{{url_for('decide_request',request_id=h[0])}}">
+        <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+        <div class="form-grid two-cols">
+          <div class="field">
+            <label>شماره پیش‌فاکتور / سفارش خرید و نام تأمین‌کننده</label>
+            <input name="po_reference" placeholder="مثلاً پیش‌فاکتور ۱۴۰۵/۴۱۲ - شرکت تامین صنعت">
+          </div>
+          <div class="field">
+            <label>گزارش اقدام و توضیحات نهایی کارشناس خرید</label>
+            <input name="comment" maxlength="1000" placeholder="نحوه ارسال، زمان تحویل به انبار پادرا و توضیحات تکمیلی...">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn primary" name="decision" value="approved">✓ ثبت انجام سفارش‌گذاری و تکمیل نهایی خرید</button>
+          <button class="btn danger" name="decision" value="rejected">× عدم امکان تأمین / رد درخواست</button>
+        </div>
+      </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if ns.current[0] == 3 and username in ['serkan_purchase_mgr', 'admin'] %}
+  <section class="panel reassign-box no-print">
+    <div class="reassign-head">
+      <b>⇄ تغییر کارشناس خرید مسئول (ویژه مدیر خرید داخلی سرکان)</b>
+      <span>در صورت نیاز به تغییر کارشناس پرونده در مرحله ۳، کارشناس جدید را انتخاب کنید:</span>
+    </div>
+    <form class="reassign-form" method="post" action="{{url_for('reassign_specialist', request_id=h[0])}}">
+      <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+      <select name="assigned_specialist" required>
+        {% for sp in purchase_specialists %}
+          <option value="{{sp.username}}" {% if sp.username == ns.current[1] %}selected{% endif %}>
+            {{sp.full_name}} — {{sp.role_title}}
+          </option>
+        {% endfor %}
+      </select>
+      <input name="reassign_note" placeholder="علت تغییر کارشناس یا دستور جدید (اختیاری)...">
+      <button class="btn secondary" type="submit">تغییر و محول‌سازی مجدد</button>
+    </form>
+  </section>
+  {% endif %}
+{% endif %}
+
 <section class="paper panel print-paper">
-  <div class="paper-head"><div class="paper-meta"><b>شرکت پادرا</b><span>شماره فرم: PDR-PR-001</span><span>گروه صنعتی سرکان</span></div><div class="paper-title"><h2>فرم درخواست خرید</h2><b>شرکت پادرا</b></div><div class="paper-logo"><span class="brand-symbol large">P</span><b>پادرا</b></div></div>
-  <div class="paper-date"><span>شماره درخواست: <strong>{{h[1]}}</strong></span><span>تاریخ درخواست: <strong>{{h[2]}}</strong></span><span>وضعیت: <strong>{{{'pending':'در جریان تأیید','submitted':'بدون مسیر تأیید','approved':'تأیید نهایی','rejected':'رد شده'}.get(h[9],h[9])}}</strong></span></div>
-  <div class="section-caption">مشخصات درخواست</div>
-  <div class="detail-grid"><div><small>نوع اقلام</small><b>{{{'goods':'مواد اولیه','service':'خدمات','equipment':'تجهیزات و قطعات','other':'سایر'}.get(h[3],h[3])}}</b></div><div><small>واحد درخواست‌کننده</small><b>{{h[4]}}</b></div><div><small>محل تأمین</small><b>{{h[5]}}</b></div><div><small>دارایی ثابت</small><b>{{'بله' if h[6] else 'خیر'}}</b></div><div><small>درخواست‌کننده</small><b>{{h[8]}}</b></div><div class="span-all"><small>توضیحات</small><b>{{h[7] or '—'}}</b></div></div>
-  <div class="section-caption">اقلام درخواستی</div>
-  <div class="table-wrap"><table class="items-table"><thead><tr><th>ردیف</th><th>کد کالا</th><th>شرح کالا / خدمت</th><th>واحد</th><th>مقدار</th><th>تاریخ نیاز</th><th>محل مصرف</th></tr></thead><tbody>{% for x in data['items'] %}<tr><td>{{x[0]}}</td><td>{{x[1] or '—'}}</td><td>{{x[2]}}</td><td>{{x[3]}}</td><td>{{x[4]}}</td><td>{{x[5]}}</td><td>{{x[6]}}</td></tr>{% endfor %}</tbody></table></div>
-  <div class="section-caption">مراحل گردش تأیید</div>
-  <div class="approval-grid">{% for a in data.approvals %}<div class="approval-box {% if a[3]=='approved' %}approval-done{% elif a[3]=='pending' %}approval-current{% elif a[3]=='rejected' %}approval-rejected{% endif %}"><div class="approval-step">مرحله {{a[0]}}</div><b>{{a[2]}}</b><span>{{a[1]}}</span><strong>{{{'waiting':'در صف انتظار','pending':'در حال بررسی','approved':'تأیید شد','rejected':'رد شد'}.get(a[3],a[3])}}</strong><small>{{a[5].strftime('%Y/%m/%d %H:%M') if a[5] else 'هنوز اقدامی ثبت نشده'}}</small>{% if a[4] %}<small class="approval-comment">{{a[4]}}</small>{% endif %}</div>{% else %}<div class="empty-inline">مسیر تأیید برای این نوع درخواست تعریف نشده است.</div>{% endfor %}</div>
-  <div class="signature-grid"><div class="signature"><b>درخواست‌کننده</b><span>{{h[8]}}</span><small>ثبت سیستمی</small></div><div class="signature"><b>مدیرعامل شرکت</b><span>مطابق گردش تأیید</span><small>تاریخ و امضا</small></div><div class="signature"><b>مدیریت گروه</b><span>در صورت نیاز سازمان</span><small>تاریخ و امضا</small></div></div>
-  {% if h[9]=='pending' %}{% for a in data.approvals if a[1]==username and a[3]=='pending' %}
-  <div class="decision-panel no-print"><h3>اقدام موردنیاز شما · {{a[2]}}</h3><p>لطفاً پیش از ثبت تصمیم، در صورت نیاز توضیحات خود را درج کنید. تصمیم ثبت‌شده در تاریخچه درخواست باقی می‌ماند.</p><form method="post" action="{{url_for('decide_request',request_id=h[0])}}"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><textarea name="comment" rows="2" maxlength="1000" placeholder="توضیح یا نظر (اختیاری)"></textarea><div class="form-actions"><button class="btn primary" name="decision" value="approved">✓ تأیید درخواست</button><button class="btn danger" name="decision" value="rejected">× رد درخواست</button></div></form></div>
-  {% endfor %}{% endif %}
+  <div class="paper-head">
+    <div class="paper-meta">
+      <b>شرکت پادرا (سهامی خاص)</b>
+      <span>شماره فرم: PDR-PR-001</span>
+      <span>طراحی و توسعه: واحد هوش تجاری سرکان</span>
+    </div>
+    <div class="paper-title">
+      <h2>فرم رسمی درخواست خرید و سفارش‌گذاری</h2>
+      <b>شرکت پادرا · زنجیره تأمین گروه صنعتی سرکان</b>
+    </div>
+    <div class="paper-logo">
+      <span class="brand-symbol large">P</span>
+      <b>پادرا</b>
+    </div>
+  </div>
+
+  <div class="paper-date">
+    <span>شماره درخواست: <strong>{{h[1]}}</strong></span>
+    <span>تاریخ درخواست: <strong>{{h[2]}}</strong></span>
+    <span>وضعیت پرونده: <strong>{{{'pending':'در جریان گردش تأیید و خرید','submitted':'بدون مسیر تأیید','approved':'تأیید نهایی و سفارش‌گذاری شد','rejected':'رد شده'}.get(h[9],h[9])}}</strong></span>
+  </div>
+
+  <div class="section-caption">۱. مشخصات درخواست خرید</div>
+  <div class="detail-grid">
+    <div><small>نوع اقلام</small><b>{{{'goods':'مواد اولیه تولید','service':'خدمات فنی و مهندسی','equipment':'تجهیزات و قطعات','other':'سایر ملزومات'}.get(h[3],h[3])}}</b></div>
+    <div><small>واحد درخواست‌کننده</small><b>{{h[4]}}</b></div>
+    <div><small>محل و نحوه تأمین</small><b>{{h[5]}}</b></div>
+    <div><small>دارایی ثابت</small><b>{{'بله (سرمایه‌ای)' if h[6] else 'خیر (مصرفی / جاری)'}}</b></div>
+    <div><small>ثبت‌کننده (شرکت پادرا)</small><b>{{req_creator.full_name}} ({{h[8]}})</b></div>
+    <div class="span-3"><small>توضیحات و ضرورت درخواست</small><b>{{h[7] or '—'}}</b></div>
+  </div>
+
+  <div class="section-caption">۲. شرح اقلام و کالاهای درخواستی</div>
+  <div class="table-wrap">
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>ردیف</th>
+          <th>کد کالا</th>
+          <th>شرح کالا / قطعه / خدمت</th>
+          <th>واحد سنجش</th>
+          <th>مقدار</th>
+          <th>تاریخ نیاز</th>
+          <th>محل مصرف در پادرا</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for x in data['items'] %}
+        <tr>
+          <td>{{x[0]}}</td>
+          <td>{{x[1] or '—'}}</td>
+          <td>{{x[2]}}</td>
+          <td>{{x[3]}}</td>
+          <td><b>{{x[4]|int if x[4] == (x[4]|int) else x[4]}}</b></td>
+          <td>{{x[5]}}</td>
+          <td>{{x[6]}}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-caption">۳. مراحل گردش تأیید و محول‌سازی خرید (پادرا ← سرکان)</div>
+  <div class="approval-grid">
+    {% for a in data.approvals %}
+      <div class="approval-box {% if a[3]=='approved' %}approval-done{% elif a[3]=='pending' %}approval-current{% elif a[3]=='rejected' %}approval-rejected{% endif %}">
+        <div class="approval-step">
+          {% if a[0]==1 %}مرحله ۱ · تأیید شرکت پادرا
+          {% elif a[0]==2 %}مرحله ۲ · ارجاع خرید سرکان
+          {% else %}مرحله {{a[0]}} · اجرای سفارش‌گذاری{% endif %}
+        </div>
+        <b>{{a[2]}}</b>
+        <span>
+          {% if a[1]=='UNASSIGNED_SPECIALIST' %}
+            تعیین کارشناس در مرحله ۲ توسط مدیر خرید داخلی
+          {% else %}
+            {{user_info(a[1]).full_name}} ({{a[1]}})
+          {% endif %}
+        </span>
+        <strong>{{{'waiting':'در صف انتظار مرحله قبل','pending':'در دست بررسی و اقدام','approved':'✓ تأیید و انجام شد','rejected':'× رد شد'}.get(a[3],a[3])}}</strong>
+        <small>{{a[5].strftime('%Y/%m/%d %H:%M') if a[5] else 'هنوز اقدامی ثبت نشده'}}</small>
+        {% if a[4] %}<small class="approval-comment">«{{a[4]}}»</small>{% endif %}
+      </div>
+    {% else %}
+      <div class="empty-inline">مسیر تأیید برای این نوع درخواست تعریف نشده است.</div>
+    {% endfor %}
+  </div>
+
+  <div class="signature-grid four-cols">
+    <div class="signature">
+      <b>۱. کارشناس درخواست‌کننده (پادرا)</b>
+      <span>{{req_creator.full_name}}</span>
+      <small>ثبت سیستمی: {{h[2]}}</small>
+    </div>
+    {% for a in data.approvals %}
+    <div class="signature">
+      <b>{{a[0] + 1}}. {{a[2]}}</b>
+      <span>
+        {% if a[1]=='UNASSIGNED_SPECIALIST' %}منتظر تخصیص کارشناس{% else %}{{user_info(a[1]).full_name}}{% endif %}
+      </span>
+      <small>
+        {% if a[3]=='approved' %}✓ تأیید سیستمی ({{a[5].strftime('%Y/%m/%d') if a[5] else ''}})
+        {% elif a[3]=='rejected' %}× رد شده
+        {% else %}در انتظار امضا / تأیید{% endif %}
+      </small>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="print-bi-footer">طراحی و توسعه داده شده توسط واحد هوش تجاری گروه صنعتی سرکان (BI)</div>
 </section>
 
 <section class="panel history-panel no-print">
-  <div class="panel-head"><div><h2>تاریخچه و ردپای عملیات</h2><p>تمام رویدادهای ثبت‌شده برای این درخواست به ترتیب زمان</p></div><span class="count">{{data.history|length}} رویداد</span></div>
+  <div class="panel-head">
+    <div>
+      <h2>تاریخچه کامل عملیات و ردپای گردش کار (Audit Trail)</h2>
+      <p>ثبت دقیق زمان، اقدام‌کننده، ارجاعات و دستورات خرید در زنجیره شرکت پادرا و گروه صنعتی سرکان</p>
+    </div>
+    <span class="count">{{data.history|length}} رویداد</span>
+  </div>
   {% if data.history %}
-  <div class="timeline">{% for item in data.history %}
-    <article class="timeline-item"><span class="timeline-marker"></span><div class="timeline-content"><div class="timeline-title"><b>{{item[0]}}</b><time>{{item[3].strftime('%Y/%m/%d · %H:%M') if item[3] else ''}}</time></div><div class="timeline-actor">ثبت‌کننده رویداد: {{'سامانه' if item[1]=='SYSTEM' else item[1]}}</div>{% if item[2] %}<p>{{item[2]}}</p>{% endif %}</div></article>
-  {% endfor %}</div>
-  {% else %}<div class="empty-inline">هنوز رویدادی در تاریخچه این درخواست ثبت نشده است.</div>{% endif %}
+  <div class="timeline">
+    {% for item in data.history %}
+      {% set actor_meta = user_info(item[1]) if item[1] != 'SYSTEM' else None %}
+      <article class="timeline-item">
+        <span class="timeline-marker"></span>
+        <div class="timeline-content">
+          <div class="timeline-title">
+            <b>{{item[0]}}</b>
+            <time>{{item[3].strftime('%Y/%m/%d · %H:%M') if item[3] else ''}}</time>
+          </div>
+          <div class="timeline-actor">
+            ثبت‌کننده رویداد:
+            {% if item[1]=='SYSTEM' %}
+              <b>هسته خودکار گردش کار (سامانه)</b>
+            {% else %}
+              <b>{{actor_meta.full_name}}</b> ({{actor_meta.role_title}})
+            {% endif %}
+          </div>
+          {% if item[2] %}<p>{{item[2]}}</p>{% endif %}
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="empty-inline">هنوز رویدادی در تاریخچه این درخواست ثبت نشده است.</div>
+  {% endif %}
 </section>
 {% endblock %}

@@ -3,8 +3,13 @@
 The caller owns the database connection/cursor. No Flask dependency is required.
 """
 from functools import wraps
-from flask import abort, current_app
-from flask_login import current_user
+try:
+    from flask import abort, current_app
+    from flask_login import current_user
+except ImportError:
+    abort = None
+    current_app = None
+    current_user = None
 
 
 def has_permission(cursor, username, project_code, permission_code):
@@ -44,8 +49,10 @@ def require_permission(connection_factory, project_code, permission_code):
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            if not current_user.is_authenticated:
-                abort(401)
+            if current_user is None or not current_user.is_authenticated:
+                if abort:
+                    abort(401)
+                raise PermissionError("Unauthorized")
             conn = cur = None
             try:
                 conn = connection_factory()
@@ -54,18 +61,23 @@ def require_permission(connection_factory, project_code, permission_code):
                     cur, current_user.username, project_code, permission_code
                 )
             except Exception:
-                current_app.logger.exception(
-                    "IAM authorization lookup failed: %s / %s",
-                    project_code, permission_code,
-                )
-                abort(503)
+                if current_app:
+                    current_app.logger.exception(
+                        "IAM authorization lookup failed: %s / %s",
+                        project_code, permission_code,
+                    )
+                if abort:
+                    abort(503)
+                raise RuntimeError("IAM service unavailable")
             finally:
                 if cur:
                     cur.close()
                 if conn:
                     conn.close()
             if not allowed:
-                abort(403)
+                if abort:
+                    abort(403)
+                raise PermissionError("Forbidden")
             return view(*args, **kwargs)
         return wrapped
     return decorator

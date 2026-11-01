@@ -1,24 +1,183 @@
-{% extends "base.html" %}{% block title %}فرم درخواست خرید | پادرا{% endblock %}{% block content %}
-<section class="page-head"><div><span class="eyebrow blue">PURCHASE REQUISITION / FORM</span><h1>فرم درخواست خرید</h1><p>اطلاعات درخواست و اقلام موردنیاز را وارد کنید.</p></div><a class="btn secondary" href="{{url_for('index')}}">بازگشت</a></section>
-<form method="post" id="purchase-form"><input type="hidden" name="csrf_token" value="{{csrf_token()}}">
-<section class="paper panel"><div class="paper-head"><div class="paper-meta"><b>شرکت پادرا</b><span>شماره فرم: PDR-PR-001</span><span>تاریخ ویرایش: ۱۴۰۵/۰۸</span></div><div class="paper-title"><h2>فرم درخواست خرید</h2><b>شرکت پادرا</b></div><div class="paper-logo"><span class="brand-symbol large">P</span><b>پادرا</b></div></div>
-<div class="paper-date">تاریخ درخواست: <strong>{{today}}</strong><span>شماره درخواست: پس از ثبت به‌صورت خودکار تولید می‌شود</span></div>
-<div class="section-caption">مشخصات درخواست</div>
-<div class="form-grid"><div class="field"><label>نوع اقلام *</label><select name="request_type" required><option value="goods">مواد اولیه</option><option value="equipment">تجهیزات و قطعات</option><option value="service">خدمات</option><option value="other">سایر</option></select></div>
-<div class="field"><label>واحد درخواست‌کننده *</label><input name="unit_name" required placeholder="مثلاً تولید، نگهداری و تعمیرات"></div>
-<div class="field"><label>محل تأمین *</label><select name="supply_location" required><option value="">انتخاب کنید</option><option>انبار مرکزی</option><option>خرید داخلی</option><option>خرید خارجی</option><option>سایر</option></select></div>
-<div class="field"><label>دارایی ثابت؟</label><div class="choice-line"><label><input type="radio" name="fixed_asset" value="yes"> بله</label><label><input type="radio" name="fixed_asset" value="no" checked> خیر</label></div></div></div>
-<div class="field full-field"><label>توضیحات و علت درخواست</label><textarea name="request_reason" rows="2" placeholder="شرح ضرورت خرید یا توضیحات تکمیلی..."></textarea></div>
-<div class="section-caption items-caption"><span>اقلام درخواستی</span><button type="button" class="btn secondary small" id="add-row">＋ افزودن ردیف</button></div>
-<div class="table-wrap items-wrap"><table class="items-table"><thead><tr><th>ردیف</th><th>کد کالا</th><th>شرح کالا / خدمت *</th><th>واحد سنجش *</th><th>مقدار *</th><th>تاریخ نیاز *</th><th>محل مصرف *</th><th class="no-print">حذف</th></tr></thead><tbody id="items-body">
-<tr class="item-row"><td class="row-number">۱</td><td><input name="item_code[]" placeholder="کد"></td><td><input name="item_description[]" required placeholder="شرح دقیق کالا"></td><td><input name="item_unit[]" required placeholder="عدد / کیلوگرم"></td><td><input name="quantity[]" required type="number" min="0.001" step="0.001" placeholder="۰"></td><td><input name="needed_date[]" required value="{{today}}" placeholder="۱۴۰۵/۰۸/۰۱"></td><td><input name="usage_location[]" required placeholder="محل مصرف"></td><td class="no-print"><button type="button" class="remove-row" aria-label="حذف ردیف">×</button></td></tr>
-</tbody></table></div>
-<div class="paper-note">توجه: تکمیل شرح کالا، واحد سنجش، مقدار، تاریخ نیاز و محل مصرف برای هر ردیف الزامی است.</div>
-<div class="signature-grid"><div class="signature"><b>درخواست‌کننده</b><span>نام و نام خانوادگی: {{username}}</span><small>تاریخ و امضا</small></div><div class="signature"><b>تأییدکننده مرحله اول</b><span>پس از ارجاع در گردش کار مشخص می‌شود</span><small>تاریخ و امضا</small></div><div class="signature"><b>تأییدکننده مرحله دوم</b><span>مطابق مسیر تأیید سازمان</span><small>تاریخ و امضا</small></div></div>
-<div class="form-actions no-print"><button class="btn primary" type="submit">ثبت درخواست و ارسال برای تأیید ←</button><a class="btn secondary" href="{{url_for('index')}}">انصراف</a><span class="secure-note">اطلاعات در یک تراکنش ذخیره می‌شود.</span></div>
-</section></form>{% endblock %}
-{% block scripts %}<script>
-const body=document.getElementById('items-body');const faDigits=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);function renumber(){[...body.querySelectorAll('.item-row')].forEach((r,i)=>r.querySelector('.row-number').textContent=faDigits(i+1));}
-document.getElementById('add-row').addEventListener('click',()=>{const row=body.querySelector('.item-row').cloneNode(true);row.querySelectorAll('input').forEach((el)=>{if(el.name==='needed_date[]')el.value='{{today}}';else el.value='';});body.appendChild(row);renumber();});
-body.addEventListener('click',e=>{if(e.target.classList.contains('remove-row')){if(body.querySelectorAll('.item-row').length>1){e.target.closest('tr').remove();renumber();}}});
-</script>{% endblock %}
+{% extends "base.html" %}
+{% block title %}ثبت درخواست خرید و سفارش‌گذاری | شرکت پادرا{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <span class="eyebrow blue">PADRA PURCHASE REQUISITION / NEW ORDER</span>
+    <h1>ثبت فرم درخواست خرید و سفارش‌گذاری (شرکت پادرا)</h1>
+    <p>پس از ثبت توسط کارشناس پادرا، درخواست به کارتابل <b>مدیرعامل شرکت پادرا</b> و سپس به <b>مدیر خرید داخلی گروه صنعتی سرکان</b> جهت تعیین کارشناس خرید ارجاع می‌شود.</p>
+  </div>
+  <a class="btn secondary" href="{{url_for('index')}}">بازگشت به داشبورد</a>
+</section>
+
+<form method="post" id="purchase-form">
+  <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+  <section class="paper panel">
+    <div class="paper-head">
+      <div class="paper-meta">
+        <b>شرکت پادرا (سهامی خاص)</b>
+        <span>شماره فرم: PDR-PR-001</span>
+        <span>واحد هوش تجاری گروه صنعتی سرکان</span>
+      </div>
+      <div class="paper-title">
+        <h2>فرم درخواست خرید و سفارش‌گذاری</h2>
+        <b>شرکت پادرا · گروه صنعتی سرکان</b>
+      </div>
+      <div class="paper-logo">
+        <span class="brand-symbol large">P</span>
+        <b>پادرا</b>
+      </div>
+    </div>
+
+    <div class="paper-date">
+      <span>تاریخ درخواست: <strong>{{today}}</strong></span>
+      <span>مسیر گردش: <strong>کارشناس پادرا ← مدیرعامل پادرا ← مدیر خرید داخلی سرکان ← کارشناس خرید</strong></span>
+      <span>شماره درخواست: <strong>تولید خودکار پس از ثبت</strong></span>
+    </div>
+
+    <div class="section-caption">۱. مشخصات سربرگ درخواست خرید</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>نوع اقلام درخواستی *</label>
+        <select name="request_type" required>
+          <option value="goods">مواد اولیه تولید</option>
+          <option value="equipment">تجهیزات، قطعات و ماشین‌آلات</option>
+          <option value="service">خدمات فنی و پیمانکاری</option>
+          <option value="other">سایر ملزومات</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>واحد درخواست‌کننده در شرکت پادرا *</label>
+        <input name="unit_name" required list="padra-units" placeholder="انتخاب یا تایپ واحد (مثلاً تولید، نت، آزمایشگاه)">
+        <datalist id="padra-units">
+          <option value="تولید و مونتاژ - پادرا">
+          <option value="نگهداری و تعمیرات (نت) - پادرا">
+          <option value="برنامه‌ریزی و کنترل تولید - پادرا">
+          <option value="کنترل کیفیت و آزمایشگاه - پادرا">
+          <option value="انبار و لجستیک - پادرا">
+          <option value="فنی و مهندسی - پادرا">
+        </datalist>
+      </div>
+      <div class="field">
+        <label>محل و نحوه تأمین *</label>
+        <select name="supply_location" required>
+          <option value="خرید داخلی (گروه صنعتی سرکان)" selected>خرید داخلی (گروه صنعتی سرکان)</option>
+          <option value="انبار مرکزی">انبار مرکزی پادرا / سرکان</option>
+          <option value="خرید خارجی / بازرگانی">خرید خارجی / بازرگانی</option>
+          <option value="سایر">سایر</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>سطح فوریت سفارش *</label>
+        <select name="priority" required>
+          <option value="عادی" selected>عادی (طبق برنامه تدارکات)</option>
+          <option value="فوری">فوری (اولویت بالا در خرید)</option>
+          <option value="آنی / توقف خط">آنی / جلوگیری از توقف خط تولید</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>دارایی ثابت / سرمایه‌ای؟</label>
+        <div class="choice-line">
+          <label><input type="radio" name="fixed_asset" value="yes"> بله (دارایی ثابت)</label>
+          <label><input type="radio" name="fixed_asset" value="no" checked> خیر (مصرفی / جاری)</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="field full-field">
+      <label>توضیحات، ضرورت خرید و مشخصات فنی تکمیلی</label>
+      <textarea name="request_reason" rows="2" placeholder="علت درخواست، اولویت خط تولید، برند یا استاندارد موردنیاز را درج نمایید..."></textarea>
+    </div>
+
+    <div class="section-caption items-caption">
+      <span>۲. فهرست اقلام و کالاهای موردنیاز</span>
+      <button type="button" class="btn secondary small" id="add-row">＋ افزودن ردیف کالا</button>
+    </div>
+
+    <div class="table-wrap items-wrap">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>ردیف</th>
+            <th>کد کالا</th>
+            <th>شرح دقیق کالا / قطعه / خدمت *</th>
+            <th>واحد سنجش *</th>
+            <th>مقدار *</th>
+            <th>تاریخ نیاز (شمسی) *</th>
+            <th>محل مصرف در پادرا *</th>
+            <th class="no-print">حذف</th>
+          </tr>
+        </thead>
+        <tbody id="items-body">
+          <tr class="item-row">
+            <td class="row-number">۱</td>
+            <td><input name="item_code[]" placeholder="مثلاً PDR-101"></td>
+            <td><input name="item_description[]" required placeholder="شرح کامل فنی و مشخصات کالا"></td>
+            <td><input name="item_unit[]" required placeholder="عدد / کیلوگرم / متر"></td>
+            <td><input name="quantity[]" required type="number" min="0.001" step="0.001" placeholder="۰"></td>
+            <td><input name="needed_date[]" required value="{{today}}" placeholder="۱۴۰۵/۰۸/۱۵"></td>
+            <td><input name="usage_location[]" required placeholder="مثلاً خط تولید ۱ / سالن مونتاژ"></td>
+            <td class="no-print"><button type="button" class="remove-row" aria-label="حذف ردیف">×</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="paper-note">توجه: تکمیل شرح کالا، واحد سنجش، مقدار، تاریخ نیاز و محل مصرف برای هر ردیف الزامی است.</div>
+
+    <div class="signature-grid four-cols">
+      <div class="signature">
+        <b>۱. ثبت‌کننده درخواست (شرکت پادرا)</b>
+        <span>{{current_user_info.full_name if current_user_info else username}}</span>
+        <small>{{current_user_info.role_title if current_user_info else 'کارشناس شرکت پادرا'}}</small>
+      </div>
+      <div class="signature">
+        <b>۲. تأییدکننده مرحله اول</b>
+        <span>مدیرعامل شرکت پادرا</span>
+        <small>ارسال خودکار پس از ثبت فرم</small>
+      </div>
+      <div class="signature">
+        <b>۳. تأیید و ارجاع مرحله دوم</b>
+        <span>مدیر خرید داخلی گروه صنعتی سرکان</span>
+        <small>بررسی و انتخاب کارشناس خرید</small>
+      </div>
+      <div class="signature">
+        <b>۴. مجری خرید (مرحله سوم)</b>
+        <span>کارشناس خرید منتخب سرکان</span>
+        <small>تخصیص توسط مدیر خرید داخلی</small>
+      </div>
+    </div>
+
+    <div class="form-actions no-print">
+      <button class="btn primary" type="submit">ثبت درخواست و ارسال به مدیرعامل شرکت پادرا ←</button>
+      <a class="btn secondary" href="{{url_for('index')}}">انصراف</a>
+      <span class="secure-note">طراحی و توسعه: واحد هوش تجاری گروه صنعتی سرکان (BI)</span>
+    </div>
+  </section>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const body=document.getElementById('items-body');
+const faDigits=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+function renumber(){
+  [...body.querySelectorAll('.item-row')].forEach((r,i)=>r.querySelector('.row-number').textContent=faDigits(i+1));
+}
+document.getElementById('add-row').addEventListener('click',()=>{
+  const row=body.querySelector('.item-row').cloneNode(true);
+  row.querySelectorAll('input').forEach((el)=>{
+    if(el.name==='needed_date[]') el.value='{{today}}';
+    else el.value='';
+  });
+  body.appendChild(row);
+  renumber();
+});
+body.addEventListener('click',e=>{
+  if(e.target.classList.contains('remove-row')){
+    if(body.querySelectorAll('.item-row').length>1){
+      e.target.closest('tr').remove();
+      renumber();
+    }
+  }
+});
+</script>
+{% endblock %}

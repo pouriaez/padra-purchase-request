@@ -1,3 +1,69 @@
 <!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ورود | سامانه خرید پادرا</title><link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}"></head>
-<body class="login-page"><main class="login-shell"><section class="login-brand"><div class="brand-logo">P</div><span class="eyebrow">SERKAN INDUSTRIAL GROUP</span><h1>شرکت پادرا</h1><p>سامانه مدیریت درخواست خرید و سفارش‌گذاری</p><div class="brand-rule"></div><small>زیرمجموعه گروه صنعتی سرکان</small></section><section class="login-content"><div class="login-box"><span class="kicker">خوش آمدید</span><h2>ورود به سامانه</h2><p class="muted">با حساب کاربری سازمانی خود وارد شوید.</p>{% with messages=get_flashed_messages(with_categories=true) %}{% for category,message in messages %}<div class="alert {{category}}">{{message}}</div>{% endfor %}{% endwith %}<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>نام کاربری</label><input name="username" autocomplete="username" required autofocus placeholder="نام کاربری"><label>رمز عبور</label><input type="password" name="password" autocomplete="current-password" required placeholder="رمز عبور"><button class="btn primary wide">ورود به سامانه <span>←</span></button></form><div class="login-foot">دسترسی ویژه کاربران مجاز سازمان</div></div></section></main></body></html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>سامانه درخواست خرید پادرا | گروه صنعتی سرکان</title>
+  <meta name="description" content="سامانه مدیریت درخواست خرید، سفارش‌گذاری و گردش تأیید مرحله‌ای شرکت پادرا (گروه صنعتی سرکان) - طراحی و توسعه توسط واحد هوش تجاری گروه صنعتی سرکان">
+  <meta property="og:title" content="سامانه درخواست خرید پادرا">
+  <meta property="og:description" content="سامانه مدیریت درخواست خرید، سفارش‌گذاری و گردش تأیید مرحله‌ای شرکت پادرا (گروه صنعتی سرکان)">
+  <link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}">
+</head>
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-brand">
+      <div class="brand-logo">P</div>
+      <span class="eyebrow">SERKAN INDUSTRIAL GROUP · PADRA CO.</span>
+      <h1>شرکت پادرا</h1>
+      <p>سامانه جامع مدیریت درخواست خرید، سفارش‌گذاری و ارجاع زنجیره تأمین</p>
+      <div class="workflow-mini-list">
+        <div><span>۱</span> ثبت سفارش توسط کارشناس شرکت پادرا</div>
+        <div><span>۲</span> بررسی و تأیید مدیرعامل شرکت پادرا</div>
+        <div><span>۳</span> ارجاع به مدیر خرید داخلی گروه صنعتی سرکان</div>
+        <div><span>۴</span> محول‌سازی به کارشناس خرید منتخب و تکمیل تأمین</div>
+      </div>
+      <div class="brand-rule"></div>
+      <small class="bi-brand-credit">طراحی و توسعه داده شده توسط واحد هوش تجاری گروه صنعتی سرکان (BI)</small>
+    </section>
+    <section class="login-content">
+      <div class="login-box">
+        <span class="kicker">خوش آمدید</span>
+        <h2>ورود به سامانه</h2>
+        <p class="muted">با حساب کاربری سازمانی خود وارد شوید یا روی یکی از نقش‌ها کلیک کنید.</p>
+        {% with messages=get_flashed_messages(with_categories=true) %}
+          {% for category,message in messages %}
+            <div class="alert {{category}}">{{message}}</div>
+          {% endfor %}
+        {% endwith %}
+        <form method="post" id="login-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>نام کاربری سازمانی</label>
+          <input id="login-username" name="username" value="serkan_purchase_mgr" autocomplete="username" required autofocus placeholder="نام کاربری">
+          <label>رمز عبور</label>
+          <input id="login-password" type="password" name="password" value="123456" autocomplete="current-password" required placeholder="رمز عبور">
+          <button class="btn primary wide" type="submit">ورود به کارتابل <span>←</span></button>
+        </form>
+        <div class="quick-login-roles">
+          <small>انتخاب سریع کارتابل (رمز همه: <b>123456</b>):</small>
+          <div class="quick-role-grid">
+            <button type="button" onclick="fillRole('padra_expert')">کارشناس پادرا</button>
+            <button type="button" onclick="fillRole('ceo_padra')">مدیرعامل پادرا</button>
+            <button type="button" onclick="fillRole('serkan_purchase_mgr')">مدیر خرید داخلی سرکان</button>
+            <button type="button" onclick="fillRole('kharid_expert_1')">کارشناس خرید ۱ (رضایی)</button>
+            <button type="button" onclick="fillRole('kharid_expert_2')">کارشناس خرید ۲ (محمدی)</button>
+            <button type="button" onclick="fillRole('kharid_expert_3')">کارشناس خرید ۳ (کریمی)</button>
+          </div>
+        </div>
+        <div class="login-foot">طراحی و توسعه داده شده توسط <b>واحد هوش تجاری گروه صنعتی سرکان</b></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    function fillRole(user) {
+      document.getElementById('login-username').value = user;
+      document.getElementById('login-password').value = '123456';
+      document.getElementById('login-form').submit();
+    }
+  </script>
+</body>
+</html>

@@ -14,12 +14,18 @@ BEGIN
   request_reason NVARCHAR(1000) NULL,
   requester_username NVARCHAR(100) NOT NULL,
   status VARCHAR(20) NOT NULL CONSTRAINT DF_purchase_status DEFAULT('pending'),
+  assigned_specialist NVARCHAR(100) NULL,
   created_at DATETIME2 NOT NULL CONSTRAINT DF_purchase_created DEFAULT(GETDATE()),
   updated_at DATETIME2 NOT NULL CONSTRAINT DF_purchase_updated DEFAULT(GETDATE())
  );
  CREATE UNIQUE INDEX UX_purchase_requests_request_no ON Project.requests(request_no) WHERE request_no IS NOT NULL;
  CREATE INDEX IX_purchase_requests_requester ON Project.requests(requester_username, created_at DESC);
  CREATE INDEX IX_purchase_requests_status ON Project.requests(status, created_at DESC);
+END;
+GO
+IF COL_LENGTH(N'Project.requests', N'assigned_specialist') IS NULL
+BEGIN
+ ALTER TABLE Project.requests ADD assigned_specialist NVARCHAR(100) NULL;
 END;
 GO
 IF OBJECT_ID(N'Project.request_items', N'U') IS NULL
@@ -83,4 +89,32 @@ BEGIN
  );
  CREATE INDEX IX_purchase_history_request ON Project.request_history(request_id, created_at);
 END;
+GO
+
+/* پیش‌فرض مسیر گردش تأیید شرکت پادرا -> گروه صنعتی سرکان:
+   مرحله ۱: مدیرعامل شرکت پادرا (ceo_padra)
+   مرحله ۲: مدیر خرید داخلی گروه صنعتی سرکان (serkan_purchase_mgr) -> انتخاب و ارجاع به کارشناس خرید
+   مرحله ۳: کارشناس خرید منتخب گروه صنعتی سرکان (تعیین توسط مدیر خرید داخلی در مرحله ۲)
+*/
+MERGE Project.approval_routes AS target
+USING (VALUES
+ ('goods', 1, N'ceo_padra', N'مدیرعامل شرکت پادرا', 1),
+ ('goods', 2, N'serkan_purchase_mgr', N'مدیر خرید داخلی گروه صنعتی سرکان', 1),
+ ('goods', 3, N'UNASSIGNED_SPECIALIST', N'کارشناس خرید گروه صنعتی سرکان', 1),
+ ('equipment', 1, N'ceo_padra', N'مدیرعامل شرکت پادرا', 1),
+ ('equipment', 2, N'serkan_purchase_mgr', N'مدیر خرید داخلی گروه صنعتی سرکان', 1),
+ ('equipment', 3, N'UNASSIGNED_SPECIALIST', N'کارشناس خرید گروه صنعتی سرکان', 1),
+ ('service', 1, N'ceo_padra', N'مدیرعامل شرکت پادرا', 1),
+ ('service', 2, N'serkan_purchase_mgr', N'مدیر خرید داخلی گروه صنعتی سرکان', 1),
+ ('service', 3, N'UNASSIGNED_SPECIALIST', N'کارشناس خرید گروه صنعتی سرکان', 1),
+ ('other', 1, N'ceo_padra', N'مدیرعامل شرکت پادرا', 1),
+ ('other', 2, N'serkan_purchase_mgr', N'مدیر خرید داخلی گروه صنعتی سرکان', 1),
+ ('other', 3, N'UNASSIGNED_SPECIALIST', N'کارشناس خرید گروه صنعتی سرکان', 1)
+) AS source (request_type, step_no, approver_username, approver_title, is_active)
+ON (target.request_type = source.request_type AND target.step_no = source.step_no)
+WHEN MATCHED THEN
+ UPDATE SET approver_username = source.approver_username, approver_title = source.approver_title, is_active = source.is_active
+WHEN NOT MATCHED THEN
+ INSERT (request_type, step_no, approver_username, approver_title, is_active)
+ VALUES (source.request_type, source.step_no, source.approver_username, source.approver_title, source.is_active);
 GO

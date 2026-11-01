@@ -1,3 +1,87 @@
 <!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% block title %}سامانه خرید پادرا{% endblock %}</title><link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}">{% block head %}{% endblock %}</head>
-<body><header class="topbar"><a class="brand" href="{{url_for('index')}}"><span class="brand-symbol">P</span><span><b>سامانه خرید پادرا</b><small>گروه صنعتی سرکان</small></span></a><div class="top-actions"><span class="user-pill">{{username}}</span><a class="logout" href="{{url_for('logout')}}">خروج</a></div></header><main class="container">{% with messages=get_flashed_messages(with_categories=true) %}{% if messages %}<div class="messages">{% for category,message in messages %}<div class="alert {{category}}">{{message}}</div>{% endfor %}</div>{% endif %}{% endwith %}{% block content %}{% endblock %}<footer>سامانه داخلی درخواست خرید پادرا <span>•</span> گروه صنعتی سرکان</footer></main>{% block scripts %}{% endblock %}</body></html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}سامانه درخواست خرید پادرا{% endblock %}</title>
+  <meta name="description" content="سامانه مدیریت درخواست خرید، سفارش‌گذاری و گردش تأیید مرحله‌ای شرکت پادرا (گروه صنعتی سرکان) - طراحی و توسعه توسط واحد هوش تجاری گروه صنعتی سرکان">
+  <meta property="og:title" content="سامانه درخواست خرید پادرا">
+  <meta property="og:description" content="سامانه مدیریت درخواست خرید، سفارش‌گذاری و گردش تأیید مرحله‌ای شرکت پادرا (گروه صنعتی سرکان)">
+  <link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar no-print">
+    <a class="brand" href="{{url_for('index')}}">
+      <span class="brand-symbol">P</span>
+      <span>
+        <b>سامانه خرید و سفارش‌گذاری شرکت پادرا</b>
+        <small>گروه صنعتی سرکان · طراحی و توسعه: واحد هوش تجاری (BI)</small>
+      </span>
+    </a>
+    <div class="top-actions">
+      {% if current_user_info %}
+      <div class="user-badge">
+        <span class="user-role-tag">{{current_user_info.org}}</span>
+        <div class="user-meta">
+          <b>{{current_user_info.full_name}}</b>
+          <small>{{current_user_info.role_title}}</small>
+        </div>
+      </div>
+      {% else %}
+      <span class="user-pill">{{username}}</span>
+      {% endif %}
+      <a class="logout" href="{{url_for('logout')}}">خروج</a>
+    </div>
+  </header>
+
+  <div class="role-switcher-bar no-print">
+    <div class="role-switcher-inner">
+      <span class="switcher-label">⇄ تغییر سریع کارتابل (گردش کار پادرا ← سرکان):</span>
+      <div class="switcher-links">
+        <a href="{{url_for('switch_user', username='padra_expert')}}" class="role-chip {% if username=='padra_expert' %}active{% endif %}">
+          <span class="step-dot">۰</span> کارشناس پادرا (ثبت‌کننده)
+        </a>
+        <a href="{{url_for('switch_user', username='ceo_padra')}}" class="role-chip {% if username=='ceo_padra' %}active{% endif %}">
+          <span class="step-dot">۱</span> مدیرعامل شرکت پادرا
+        </a>
+        <a href="{{url_for('switch_user', username='serkan_purchase_mgr')}}" class="role-chip {% if username=='serkan_purchase_mgr' %}active{% endif %}">
+          <span class="step-dot">۲</span> مدیر خرید داخلی سرکان
+        </a>
+        <a href="{{url_for('switch_user', username='kharid_expert_1')}}" class="role-chip {% if username=='kharid_expert_1' %}active{% endif %}">
+          <span class="step-dot">۳ الف</span> کارشناس خرید ۱ (رضایی - فنی)
+        </a>
+        <a href="{{url_for('switch_user', username='kharid_expert_2')}}" class="role-chip {% if username=='kharid_expert_2' %}active{% endif %}">
+          <span class="step-dot">۳ ب</span> کارشناس خرید ۲ (محمدی - مواد)
+        </a>
+        <a href="{{url_for('switch_user', username='kharid_expert_3')}}" class="role-chip {% if username=='kharid_expert_3' %}active{% endif %}">
+          <span class="step-dot">۳ ج</span> کارشناس خرید ۳ (کریمی - خدمات)
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+    {% with messages=get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="messages no-print">
+          {% for category,message in messages %}
+            <div class="alert {{category}}">{{message}}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+
+    <footer class="app-footer no-print">
+      <div class="bi-credit-banner">
+        <span class="bi-badge">BI · SERKAN INDUSTRIAL GROUP</span>
+        <b>طراحی و توسعه داده شده توسط واحد هوش تجاری گروه صنعتی سرکان</b>
+        <small>سامانه یکپارچه مدیریت درخواست خرید و سفارش‌گذاری شرکت پادرا · متصل به زنجیره تأمین گروه صنعتی سرکان</small>
+      </div>
+    </footer>
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
