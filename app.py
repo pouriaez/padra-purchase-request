@@ -1496,4 +1496,4 @@ def healthz():
 
 if __name__ == "__main__":
     from waitress import serve
-    serve(app, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", "3942"))))
+    serve(app, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", "3942")))
