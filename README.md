@@ -18,11 +18,10 @@
 3. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
    `python -m venv .venv`
    `.venv\\Scripts\\activate`
-   `pip install -r requirements.txt`
+   `pip install -r requirements-windows.txt`
 4. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
-5. اجرا:
-   `python -m waitress --host=0.0.0.0 --port=3942 app:app`
-6. آدرس: `http://SERVER:3942`
+5. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
+6. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).\n7. آدرس برنامه: `http://SERVER:3942`
 
 ## مجوزهای SQL
 - دیتابیس احراز هویت: دسترسی SELECT به `[Project].[loginusers]`.
