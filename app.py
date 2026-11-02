@@ -619,7 +619,7 @@ def db_connect(auth=False):
             prefix = "AUTH_DB_" if auth else "DATA_DB_"
             app.logger.exception("%s SQL Server connection failed", prefix)
             raise RuntimeError(prefix + " SQL Server connection failed. Check server, database, ODBC driver, network access and SQL login credentials.") from exc
-    if os.getenv("ALLOW_SQLITE_FALLBACK", "true").strip().lower() not in {"1", "true", "yes", "on"}:
+    if os.getenv("ALLOW_SQLITE_FALLBACK", "false").strip().lower() not in {"1", "true", "yes", "on"}:
         raise RuntimeError("SQL Server credentials are not configured and SQLite preview mode is disabled.")
     return SQLiteCompatConnection(LOCAL_DB_PATH)
 
