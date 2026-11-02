@@ -33,8 +33,9 @@ load_dotenv(dotenv_path=BASE_DIR / ".env", override=False)
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or "padra-serkan-bi-secret-key-2026"
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
-app.config["SESSION_COOKIE_SAMESITE"] = "None"
-app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false").strip().lower() in {"1", "true", "yes", "on"}
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 CSRFProtect(app)
 login_manager = LoginManager(app)
@@ -576,9 +577,7 @@ _init_local_sqlite_db()
 
 def _has_sqlserver_config(auth=False):
     prefix = "AUTH_DB_" if auth else "DATA_DB_"
-    user = os.getenv(prefix + "USER", "").strip()
-    password = os.getenv(prefix + "PASSWORD", "")
-    return bool(pyodbc is not None and user and password)
+    return bool(os.getenv(prefix + "USER", "").strip() or os.getenv(prefix + "PASSWORD", ""))
 
 
 def conn_string(auth=False):
@@ -612,10 +611,16 @@ def conn_string(auth=False):
 
 def db_connect(auth=False):
     if _has_sqlserver_config(auth):
+        if pyodbc is None:
+            raise RuntimeError("pyodbc is not installed; install requirements-windows.txt.")
         try:
-            return pyodbc.connect(conn_string(auth), timeout=5)
-        except Exception:
-            app.logger.warning("SQL Server unreachable; falling back to local SQLite database.")
+            return pyodbc.connect(conn_string(auth), timeout=8)
+        except Exception as exc:
+            prefix = "AUTH_DB_" if auth else "DATA_DB_"
+            app.logger.exception("%s SQL Server connection failed", prefix)
+            raise RuntimeError(prefix + " SQL Server connection failed. Check server, database, ODBC driver, network access and SQL login credentials.") from exc
+    if os.getenv("ALLOW_SQLITE_FALLBACK", "true").strip().lower() not in {"1", "true", "yes", "on"}:
+        raise RuntimeError("SQL Server credentials are not configured and SQLite preview mode is disabled.")
     return SQLiteCompatConnection(LOCAL_DB_PATH)
 
 
@@ -1483,6 +1488,12 @@ def not_found(_):
     return render_template("error.html", code=404, message="صفحه یا درخواست موردنظر پیدا نشد."), 404
 
 
+@app.route("/healthz")
+def healthz():
+    """Lightweight process health check; intentionally does not require a database."""
+    return {"status": "ok", "service": "padra-purchase-request"}, 200
+
+
 if __name__ == "__main__":
     from waitress import serve
-    serve(app, host="0.0.0.0", port=int(os.getenv("PORT", "3000")))
+    serve(app, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", "3942"))))
