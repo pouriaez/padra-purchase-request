@@ -660,6 +660,40 @@ def user_display_info(username: str) -> dict:
     }
 
 
+def get_purchase_specialists():
+    """Resolve specialist accounts from central IAM role assignments, not a Python allow-list."""
+    conn = cur = None
+    try:
+        conn = auth_db()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT DISTINCT u.username
+               FROM Project.loginusers u
+               INNER JOIN Project.IAM_UserRoles ur ON ur.user_id=u.id
+               INNER JOIN Project.IAM_Roles r ON r.id=ur.role_id AND r.is_active=1
+               WHERE r.role_key='serkan_purchase_specialist'
+                 AND (ur.valid_from IS NULL OR ur.valid_from<=SYSUTCDATETIME())
+                 AND (ur.valid_until IS NULL OR ur.valid_until>SYSUTCDATETIME())
+               ORDER BY u.username"""
+        )
+        specialists=[]
+        for row in cur.fetchall():
+            info=user_display_info(row[0])
+            info["username"]=row[0]
+            info.setdefault("full_name",row[0])
+            info.setdefault("role_title","کارشناس خرید")
+            specialists.append(info)
+        return specialists
+    except Exception:
+        app.logger.exception("Unable to load purchase specialists from IAM")
+        return []
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
 def compute_bi_analytics(cur) -> dict:
     """محاسبه شاخص‌های تحلیلی هوش تجاری (BI) و بار کاری کارشناسان خرید سرکان."""
     cur.execute(
@@ -674,7 +708,7 @@ def compute_bi_analytics(cur) -> dict:
         stage_Waiting[int(step_no)] = int(cnt)
 
     specialist_workloads = {}
-    for sp in PURCHASE_SPECIALISTS:
+    for sp in get_purchase_specialists():
         uname = sp["username"]
         cur.execute(
             """SELECT
@@ -779,7 +813,7 @@ def load_user(user_id):
 def inject_organizational_context():
     return {
         "org_users": ORGANIZATIONAL_USERS,
-        "purchase_specialists": PURCHASE_SPECIALISTS,
+        "purchase_specialists": get_purchase_specialists(),
         "user_info": user_display_info,
         "current_user_info": user_display_info(current_user.username) if current_user.is_authenticated else None,
     }
@@ -1320,11 +1354,14 @@ def decide_request(request_id):
             if not has_iam_permission("requests.assign_specialist"):
                 conn.rollback()
                 abort(403)
-            if not selected_specialist or selected_specialist not in {s["username"] for s in PURCHASE_SPECIALISTS}:
+            if not selected_specialist or selected_specialist not in {s["username"] for s in get_purchase_specialists()}:
                 conn.rollback()
                 flash("لطفاً کارشناس خرید موردنظر خود را جهت محول‌سازی سفارش انتخاب نمایید.", "error")
                 return redirect(url_for("view_request", request_id=request_id))
-            specialist_info = ORGANIZATIONAL_USERS[selected_specialist]
+            specialist_info = user_display_info(selected_specialist)
+            specialist_info.setdefault("full_name", selected_specialist)
+            specialist_info.setdefault("role_title", "کارشناس خرید")
+            specialist_info["username"] = selected_specialist
 
         full_comment = comment
         if po_reference and current_step_no == 3:
@@ -1475,7 +1512,7 @@ def reassign_specialist(request_id):
         abort(403)
     new_specialist = request.form.get("assigned_specialist", "").strip()
     note = request.form.get("reassign_note", "").strip()
-    if new_specialist not in {s["username"] for s in PURCHASE_SPECIALISTS}:
+    if new_specialist not in {s["username"] for s in get_purchase_specialists()}:
         flash("کارشناس خرید انتخاب‌شده معتبر نیست.", "error")
         return redirect(url_for("view_request", request_id=request_id))
 
