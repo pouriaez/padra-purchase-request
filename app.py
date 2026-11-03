@@ -31,7 +31,9 @@ LOCAL_DB_PATH = BASE_DIR / "padra_workflow.db"
 load_dotenv(dotenv_path=BASE_DIR / ".env", override=False)
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY") or "padra-serkan-bi-secret-key-2026"
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip()
+if not app.secret_key:
+    raise RuntimeError("FLASK_SECRET_KEY is required; set a long random value in .env")
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024
 app.config["SESSION_COOKIE_SAMESITE"] = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false").strip().lower() in {"1", "true", "yes", "on"}
@@ -658,6 +660,40 @@ def user_display_info(username: str) -> dict:
     }
 
 
+def get_purchase_specialists():
+    """Resolve specialist accounts from central IAM role assignments, not a Python allow-list."""
+    conn = cur = None
+    try:
+        conn = auth_db()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT DISTINCT u.username
+               FROM Project.loginusers u
+               INNER JOIN Project.IAM_UserRoles ur ON ur.user_id=u.id
+               INNER JOIN Project.IAM_Roles r ON r.id=ur.role_id AND r.is_active=1
+               WHERE r.role_key='serkan_purchase_specialist'
+                 AND (ur.valid_from IS NULL OR ur.valid_from<=SYSUTCDATETIME())
+                 AND (ur.valid_until IS NULL OR ur.valid_until>SYSUTCDATETIME())
+               ORDER BY u.username"""
+        )
+        specialists=[]
+        for row in cur.fetchall():
+            info=user_display_info(row[0])
+            info["username"]=row[0]
+            info.setdefault("full_name",row[0])
+            info.setdefault("role_title","کارشناس خرید")
+            specialists.append(info)
+        return specialists
+    except Exception:
+        app.logger.exception("Unable to load purchase specialists from IAM")
+        return []
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
 def compute_bi_analytics(cur) -> dict:
     """محاسبه شاخص‌های تحلیلی هوش تجاری (BI) و بار کاری کارشناسان خرید سرکان."""
     cur.execute(
@@ -672,7 +708,7 @@ def compute_bi_analytics(cur) -> dict:
         stage_Waiting[int(step_no)] = int(cnt)
 
     specialist_workloads = {}
-    for sp in PURCHASE_SPECIALISTS:
+    for sp in get_purchase_specialists():
         uname = sp["username"]
         cur.execute(
             """SELECT
@@ -709,6 +745,51 @@ class User(UserMixin):
         self.org = info["org"]
 
 
+def has_iam_permission(permission_key):
+    """Read authorization directly from the central IAM SQL tables; no HTTP/API/token."""
+    if not current_user.is_authenticated:
+        return False
+    conn = cur = None
+    try:
+        conn = auth_db()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT TOP (1) 1
+               FROM Project.IAM_UserRoles ur
+               INNER JOIN Project.IAM_Roles r ON r.id=ur.role_id AND r.is_active=1
+               INNER JOIN Project.IAM_RolePermissions rp ON rp.role_id=r.id
+               INNER JOIN Project.IAM_Permissions p ON p.id=rp.permission_id AND p.is_active=1
+               INNER JOIN Project.IAM_Projects pr ON pr.id=p.project_id AND pr.is_active=1
+               WHERE ur.user_id=? AND pr.project_key='padra-purchase-request'
+                 AND p.permission_key=?
+                 AND (r.project_id IS NULL OR r.project_id=pr.id)
+                 AND (ur.valid_from IS NULL OR ur.valid_from<=SYSUTCDATETIME())
+                 AND (ur.valid_until IS NULL OR ur.valid_until>SYSUTCDATETIME())""",
+            int(current_user.id), permission_key,
+        )
+        return cur.fetchone() is not None
+    except Exception:
+        app.logger.exception("IAM SQL permission lookup failed: %s", permission_key)
+        return False
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+def require_permission(permission_key):
+    def decorator(fn):
+        @wraps(fn)
+        @login_required
+        def wrapped(*args, **kwargs):
+            if not has_iam_permission(permission_key):
+                abort(403)
+            return fn(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
 @login_manager.user_loader
 def load_user(user_id):
     conn = cur = None
@@ -728,25 +809,11 @@ def load_user(user_id):
             conn.close()
 
 
-_FALLBACK_ACTIVE_USERNAME = "serkan_purchase_mgr"
-
-
-@app.before_request
-def _auto_authenticate_preview_if_needed():
-    if request.endpoint in ("static", "login", "logout", "switch_user"):
-        return
-    if not current_user.is_authenticated and not _has_sqlserver_config(auth=True):
-        if not session.get("explicit_logout"):
-            u = verify_user_by_username(_FALLBACK_ACTIVE_USERNAME)
-            if u:
-                login_user(u, remember=False)
-
-
 @app.context_processor
 def inject_organizational_context():
     return {
         "org_users": ORGANIZATIONAL_USERS,
-        "purchase_specialists": PURCHASE_SPECIALISTS,
+        "purchase_specialists": get_purchase_specialists(),
         "user_info": user_display_info,
         "current_user_info": user_display_info(current_user.username) if current_user.is_authenticated else None,
     }
@@ -768,18 +835,29 @@ def verify_user_by_username(username):
 
 
 def verify_user(username, password):
+    from werkzeug.security import check_password_hash
+    import hmac
     conn = cur = None
     try:
         conn = auth_db()
         cur = conn.cursor()
         cur.execute(
-            """SELECT TOP (1) id, username FROM [Project].[loginusers]
-               WHERE username = ? AND password_hash = ?""",
+            """SELECT TOP (1) id, username, password_hash
+               FROM [Project].[loginusers] WHERE username = ?""",
             username,
-            password,
         )
         row = cur.fetchone()
-        return User(row[0], row[1]) if row else None
+        if not row:
+            return None
+        stored = row[2] or ""
+        if stored.startswith(("scrypt:", "pbkdf2:")):
+            try:
+                valid = check_password_hash(stored, password)
+            except (ValueError, TypeError):
+                valid = False
+        else:
+            valid = hmac.compare_digest(str(stored), str(password))
+        return User(row[0], row[1]) if valid else None
     finally:
         if cur:
             cur.close()
@@ -845,36 +923,18 @@ def unauthorized():
     return redirect(url_for("login", next=request.url))
 
 
-@app.route("/switch-user/<username>")
-def switch_user(username):
-    global _FALLBACK_ACTIVE_USERNAME
-    if username not in ORGANIZATIONAL_USERS:
-        abort(404)
-    user = verify_user_by_username(username)
-    if user:
-        _FALLBACK_ACTIVE_USERNAME = username
-        session.pop("explicit_logout", None)
-        login_user(user, remember=False)
-        info = ORGANIZATIONAL_USERS[username]
-        flash(f"کارتابل فعال به «{info['role_title']} ({info['full_name']})» تغییر یافت.", "success")
-    next_url = request.args.get("next") or request.referrer or url_for("index")
-    if "/login" in next_url:
-        next_url = url_for("index")
-    return redirect(next_url)
-
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    global _FALLBACK_ACTIVE_USERNAME
     if request.method == "POST":
         username, password = request.form.get("username", "").strip(), request.form.get("password", "")
         try:
             user = verify_user(username, password)
             if user:
-                _FALLBACK_ACTIVE_USERNAME = user.username
-                session.pop("explicit_logout", None)
                 login_user(user, remember=False)
-                return redirect(request.args.get("next") or url_for("index"))
+                next_url = request.args.get("next", "")
+                if next_url.startswith("/") and not next_url.startswith("//"):
+                    return redirect(next_url)
+                return redirect(url_for("index"))
             flash("نام کاربری یا رمز عبور صحیح نیست.", "error")
         except Exception:
             app.logger.exception("Login failed")
@@ -904,9 +964,7 @@ def index():
         if type_filter not in {"goods", "equipment", "service", "other"}:
             type_filter = ""
 
-        is_full_visibility = current_user.username in {
-            "admin", "ceo_padra", "serkan_purchase_mgr", "padra_expert"
-        }
+        is_full_visibility = has_iam_permission("requests.view_all")
         if is_full_visibility:
             visibility = "1=1"
             vis_params = []
@@ -1003,14 +1061,23 @@ def index():
 
 
 @app.route("/export/csv")
-@login_required
+@require_permission("requests.export")
 def export_csv():
     """خروجی اکسل (CSV با UTF-8 BOM) ویژه گزارش‌گیری مدیریتی واحد هوش تجاری سرکان."""
     conn = data_db()
     try:
         cur = conn.cursor()
+        is_full_visibility = has_iam_permission("requests.view_all")
+        if is_full_visibility:
+            visibility = "1=1"
+            vis_params = []
+        else:
+            visibility = """(r.requester_username=? OR EXISTS
+                             (SELECT 1 FROM Project.approvals ax
+                              WHERE ax.request_id=r.id AND ax.approver_username=?))"""
+            vis_params = [current_user.username, current_user.username]
         cur.execute(
-            """SELECT TOP (500)
+            f"""SELECT TOP (500)
                     r.id,r.request_no,r.request_date_fa,r.request_type,r.unit_name,
                     r.status,r.created_at,r.requester_username,r.updated_at,
                     COALESCE(p.approver_username,N'') AS current_approver,
@@ -1033,7 +1100,9 @@ def export_csv():
                    SELECT COUNT(*) AS item_count
                    FROM Project.request_items i WHERE i.request_id=r.id
                ) it
-               ORDER BY r.id DESC"""
+               WHERE {visibility}
+               ORDER BY r.id DESC""",
+            *vis_params,
         )
         rows = cur.fetchall()
         type_map = {"goods": "مواد اولیه", "service": "خدمات فنی", "equipment": "تجهیزات و قطعات", "other": "سایر"}
@@ -1087,7 +1156,7 @@ def export_csv():
 
 
 @app.route("/request/new", methods=["GET", "POST"])
-@login_required
+@require_permission("requests.create")
 def new_request():
     if request.method == "POST":
         request_type = request.form.get("request_type", "goods")
@@ -1229,7 +1298,7 @@ def view_request(request_id):
     if not data:
         abort(404)
     h = data["header"]
-    is_privileged = current_user.username in {"admin", "ceo_padra", "serkan_purchase_mgr", "padra_expert"}
+    is_privileged = has_iam_permission("requests.view_all")
     if not is_privileged and h[8] != current_user.username and not any(a[1] == current_user.username for a in data["approvals"]):
         abort(403)
     return render_template("request_detail.html", data=data, username=current_user.username)
@@ -1252,38 +1321,41 @@ def decide_request(request_id):
         conn.autocommit = False
         cur = conn.cursor()
 
-        if current_user.username == "admin":
-            cur.execute(
-                """SELECT TOP (1) id, step_no, approver_username, approver_title FROM Project.approvals
-                   WHERE request_id=? AND decision='pending' ORDER BY step_no""",
-                request_id,
-            )
-        else:
-            cur.execute(
-                """SELECT TOP (1) id, step_no, approver_username, approver_title FROM Project.approvals
-                   WHERE request_id=? AND approver_username=? AND decision='pending'""",
-                request_id,
-                current_user.username,
-            )
+        cur.execute(
+            """SELECT TOP (1) id, step_no, approver_username, approver_title FROM Project.approvals
+               WHERE request_id=? AND approver_username=? AND decision='pending'""",
+            request_id, current_user.username,
+        )
         approval = cur.fetchone()
         if not approval:
             conn.rollback()
             abort(403)
 
         approval_id, current_step_no, step_approver_user, step_approver_title = (
-            approval[0],
-            approval[1],
-            approval[2],
-            approval[3],
+            approval[0], approval[1], approval[2], approval[3],
         )
+        required_permission = {
+            1: "requests.approve.step1",
+            2: "requests.approve.step2",
+            3: "requests.approve.step3",
+        }.get(int(current_step_no))
+        if not required_permission or not has_iam_permission(required_permission):
+            conn.rollback()
+            abort(403)
 
         specialist_info = None
         if decision == "approved" and current_step_no == 2:
-            if not selected_specialist or selected_specialist not in {s["username"] for s in PURCHASE_SPECIALISTS}:
+            if not has_iam_permission("requests.assign_specialist"):
+                conn.rollback()
+                abort(403)
+            if not selected_specialist or selected_specialist not in {s["username"] for s in get_purchase_specialists()}:
                 conn.rollback()
                 flash("لطفاً کارشناس خرید موردنظر خود را جهت محول‌سازی سفارش انتخاب نمایید.", "error")
                 return redirect(url_for("view_request", request_id=request_id))
-            specialist_info = ORGANIZATIONAL_USERS[selected_specialist]
+            specialist_info = user_display_info(selected_specialist)
+            specialist_info.setdefault("full_name", selected_specialist)
+            specialist_info.setdefault("role_title", "کارشناس خرید")
+            specialist_info["username"] = selected_specialist
 
         full_comment = comment
         if po_reference and current_step_no == 3:
@@ -1430,15 +1502,17 @@ def decide_request(request_id):
 @login_required
 def reassign_specialist(request_id):
     """امکان تغییر کارشناس خرید توسط مدیر خرید داخلی گروه صنعتی سرکان در مرحله ۳."""
-    if current_user.username not in {"serkan_purchase_mgr", "admin"}:
+    if not has_iam_permission("requests.reassign_specialist"):
         abort(403)
     new_specialist = request.form.get("assigned_specialist", "").strip()
     note = request.form.get("reassign_note", "").strip()
-    if new_specialist not in {s["username"] for s in PURCHASE_SPECIALISTS}:
+    if new_specialist not in {s["username"] for s in get_purchase_specialists()}:
         flash("کارشناس خرید انتخاب‌شده معتبر نیست.", "error")
         return redirect(url_for("view_request", request_id=request_id))
 
-    spec_info = ORGANIZATIONAL_USERS[new_specialist]
+    spec_info = ORGANIZATIONAL_USERS.get(new_specialist) or user_display_info(new_specialist)
+    spec_info.setdefault("full_name", new_specialist)
+    spec_info.setdefault("role_title", "کارشناس خرید")
     spec_title = f"{spec_info['role_title']} - {spec_info['full_name']}"
     conn = cur = None
     try:
