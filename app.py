@@ -835,7 +835,7 @@ def verify_user_by_username(username):
 
 
 def verify_user(username, password):
-    from werkzeug.security import check_password_hash, generate_password_hash
+    from werkzeug.security import check_password_hash
     import hmac
     conn = cur = None
     try:
@@ -857,12 +857,6 @@ def verify_user(username, password):
                 valid = False
         else:
             valid = hmac.compare_digest(str(stored), str(password))
-            if valid:
-                cur.execute(
-                    "UPDATE [Project].[loginusers] SET password_hash=? WHERE id=? AND password_hash=?",
-                    generate_password_hash(password), row[0], stored,
-                )
-                conn.commit()
         return User(row[0], row[1]) if valid else None
     finally:
         if cur:
