@@ -7,29 +7,45 @@
   <meta name="description" content="سامانه مدیریت درخواست خرید، سفارش‌گذاری و گردش تأیید مرحله‌ای شرکت پادرا (گروه صنعتی سرکان) - طراحی و توسعه توسط واحد هوش تجاری گروه صنعتی سرکان">
   <meta property="og:title" content="سامانه درخواست خرید پادرا">
   <meta property="og:description" content="سامانه مدیریت درخواست خرید، سفارش‌گذاری و گردش تأیید مرحله‌ای شرکت پادرا (گروه صنعتی سرکان)">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}">
+  <script>
+    (function() {
+      try {
+        if (localStorage.getItem('padra_theme') === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body class="login-page">
   <main class="login-shell">
     <section class="login-brand">
-      <div class="brand-logo">P</div>
-      <span class="eyebrow">SERKAN INDUSTRIAL GROUP · PADRA CO.</span>
-      <h1>شرکت پادرا</h1>
-      <p>سامانه جامع مدیریت درخواست خرید، سفارش‌گذاری و ارجاع زنجیره تأمین</p>
-      <div class="workflow-mini-list">
-        <div><span>۱</span> ثبت سفارش توسط کارشناس شرکت پادرا</div>
-        <div><span>۲</span> بررسی و تأیید مدیرعامل شرکت پادرا</div>
-        <div><span>۳</span> ارجاع به مدیر خرید داخلی گروه صنعتی سرکان</div>
-        <div><span>۴</span> محول‌سازی به کارشناس خرید منتخب و تکمیل تأمین</div>
+      <div>
+        <div class="brand-logo">P</div>
+        <span class="eyebrow">SERKAN INDUSTRIAL GROUP · PADRA CO.</span>
+        <h1>شرکت پادرا</h1>
+        <p>سامانه جامع مدیریت درخواست خرید، سفارش‌گذاری و ارجاع هوشمند در زنجیره تأمین گروه صنعتی سرکان</p>
+        <div class="workflow-mini-list">
+          <div><span>۱</span> ثبت سفارش توسط کارشناس شرکت پادرا</div>
+          <div><span>۲</span> بررسی و تأیید مدیرعامل شرکت پادرا</div>
+          <div><span>۳</span> ارجاع به مدیر خرید داخلی گروه صنعتی سرکان</div>
+          <div><span>۴</span> محول‌سازی به کارشناس خرید منتخب و تکمیل تأمین</div>
+        </div>
       </div>
-      <div class="brand-rule"></div>
-      <small class="bi-brand-credit">طراحی و توسعه داده شده توسط واحد هوش تجاری گروه صنعتی سرکان (BI)</small>
+      <div>
+        <div class="brand-rule"></div>
+        <small class="bi-brand-credit">طراحی و توسعه داده شده توسط واحد هوش تجاری گروه صنعتی سرکان (BI)</small>
+      </div>
     </section>
     <section class="login-content">
       <div class="login-box">
-        <span class="kicker">خوش آمدید</span>
+        <span class="kicker">پورتال سازمانی زنجیره تأمین</span>
         <h2>ورود به سامانه</h2>
-        <p class="muted">با حساب کاربری سازمانی خود وارد شوید یا روی یکی از نقش‌ها کلیک کنید.</p>
+        <p class="muted">با حساب کاربری سازمانی خود وارد شوید یا جهت تست سریع روی یکی از کارتابل‌ها کلیک کنید.</p>
         {% with messages=get_flashed_messages(with_categories=true) %}
           {% for category,message in messages %}
             <div class="alert {{category}}">{{message}}</div>
@@ -41,17 +57,17 @@
           <input id="login-username" name="username" value="serkan_purchase_mgr" autocomplete="username" required autofocus placeholder="نام کاربری">
           <label>رمز عبور</label>
           <input id="login-password" type="password" name="password" value="123456" autocomplete="current-password" required placeholder="رمز عبور">
-          <button class="btn primary wide" type="submit">ورود به کارتابل <span>←</span></button>
+          <button class="btn primary wide" type="submit">ورود به کارتابل سازمانی <span>←</span></button>
         </form>
         <div class="quick-login-roles">
           <small>انتخاب سریع کارتابل (رمز همه: <b>123456</b>):</small>
           <div class="quick-role-grid">
-            <button type="button" onclick="fillRole('padra_expert')">کارشناس پادرا</button>
-            <button type="button" onclick="fillRole('ceo_padra')">مدیرعامل پادرا</button>
-            <button type="button" onclick="fillRole('serkan_purchase_mgr')">مدیر خرید داخلی سرکان</button>
-            <button type="button" onclick="fillRole('kharid_expert_1')">کارشناس خرید ۱ (رضایی)</button>
-            <button type="button" onclick="fillRole('kharid_expert_2')">کارشناس خرید ۲ (محمدی)</button>
-            <button type="button" onclick="fillRole('kharid_expert_3')">کارشناس خرید ۳ (کریمی)</button>
+            <button type="button" onclick="fillRole('padra_expert')"><span>کارشناس پادرا</span> <span>↵</span></button>
+            <button type="button" onclick="fillRole('ceo_padra')"><span>مدیرعامل پادرا</span> <span>↵</span></button>
+            <button type="button" onclick="fillRole('serkan_purchase_mgr')"><span>مدیر خرید داخلی سرکان</span> <span>↵</span></button>
+            <button type="button" onclick="fillRole('kharid_expert_1')"><span>کارشناس خرید ۱ (رضایی)</span> <span>↵</span></button>
+            <button type="button" onclick="fillRole('kharid_expert_2')"><span>کارشناس خرید ۲ (محمدی)</span> <span>↵</span></button>
+            <button type="button" onclick="fillRole('kharid_expert_3')"><span>کارشناس خرید ۳ (کریمی)</span> <span>↵</span></button>
           </div>
         </div>
         <div class="login-foot">طراحی و توسعه داده شده توسط <b>واحد هوش تجاری گروه صنعتی سرکان</b></div>

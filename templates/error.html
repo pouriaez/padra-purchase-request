@@ -1,1 +1,12 @@
-{% extends "base.html" %}{% block title %}خطا | پادرا{% endblock %}{% block content %}<section class="panel error-page"><strong>{{code}}</strong><h1>دسترسی امکان‌پذیر نیست</h1><p>{{message}}</p><a class="btn primary" href="{{url_for('index')}}">بازگشت به داشبورد</a></section>{% endblock %}
+{% extends "base.html" %}
+{% block title %}خطا {{code}} | سامانه درخواست خرید پادرا{% endblock %}
+{% block content %}
+<section class="panel error-page">
+  <strong>{{code}}</strong>
+  <h1>دسترسی یا نمایش این بخش امکان‌پذیر نیست</h1>
+  <p>{{message}}</p>
+  <div style="margin-top:20px;display:flex;justify-content:center;gap:10px">
+    <a class="btn primary" href="{{url_for('index')}}">بازگشت به داشبورد کارتابل ←</a>
+  </div>
+</section>
+{% endblock %}

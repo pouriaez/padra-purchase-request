@@ -7,7 +7,20 @@
   <meta name="description" content="سامانه مدیریت درخواست خرید، سفارش‌گذاری و گردش تأیید مرحله‌ای شرکت پادرا (گروه صنعتی سرکان) - طراحی و توسعه توسط واحد هوش تجاری گروه صنعتی سرکان">
   <meta property="og:title" content="سامانه درخواست خرید پادرا">
   <meta property="og:description" content="سامانه مدیریت درخواست خرید، سفارش‌گذاری و گردش تأیید مرحله‌ای شرکت پادرا (گروه صنعتی سرکان)">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}">
+  <script>
+    (function() {
+      try {
+        var savedTheme = localStorage.getItem('padra_theme');
+        if (savedTheme === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -19,7 +32,27 @@
         <small>گروه صنعتی سرکان · طراحی و توسعه: واحد هوش تجاری (BI)</small>
       </span>
     </a>
+
+    <nav class="top-nav-links" aria-label="ناوبری اصلی">
+      <a href="{{url_for('index')}}" class="top-nav-link {% if request.endpoint == 'index' and not request.args.get('status') %}active{% endif %}">
+        داشبورد کارتابل
+      </a>
+      <a href="{{url_for('index', status='my_turn')}}" class="top-nav-link {% if request.args.get('status') == 'my_turn' %}active{% endif %}">
+        نوبت اقدام من
+      </a>
+      <a href="{{url_for('new_request')}}" class="top-nav-link {% if request.endpoint == 'new_request' %}active{% endif %}">
+        ثبت درخواست جدید
+      </a>
+      <a href="{{url_for('export_csv')}}" class="top-nav-link">
+        خروجی اکسل (CSV)
+      </a>
+    </nav>
+
     <div class="top-actions">
+      <button type="button" class="theme-toggle-btn" id="theme-toggle" title="تغییر حالت نمایش (روز / شب)" aria-label="تغییر حالت نمایش">
+        <svg id="theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        <svg id="theme-icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+      </button>
       {% if current_user_info %}
       <div class="user-badge">
         <span class="user-role-tag">{{current_user_info.org}}</span>
@@ -57,6 +90,9 @@
         <a href="{{url_for('switch_user', username='kharid_expert_3')}}" class="role-chip {% if username=='kharid_expert_3' %}active{% endif %}">
           <span class="step-dot">۳ ج</span> کارشناس خرید ۳ (کریمی - خدمات)
         </a>
+        <a href="{{url_for('switch_user', username='admin')}}" class="role-chip {% if username=='admin' %}active{% endif %}">
+          <span class="step-dot">BI</span> مدیر سیستم (هوش تجاری)
+        </a>
       </div>
     </div>
   </div>
@@ -66,7 +102,10 @@
       {% if messages %}
         <div class="messages no-print">
           {% for category,message in messages %}
-            <div class="alert {{category}}">{{message}}</div>
+            <div class="alert {{category}}">
+              <span>{{message}}</span>
+              <button type="button" onclick="this.parentElement.remove()" style="background:none;border:0;color:inherit;cursor:pointer;font-size:16px;font-weight:bold;padding:0 4px" aria-label="بستن پیام">×</button>
+            </div>
           {% endfor %}
         </div>
       {% endif %}
@@ -82,6 +121,35 @@
       </div>
     </footer>
   </main>
+
+  <script>
+    (function() {
+      var btn = document.getElementById('theme-toggle');
+      var sun = document.getElementById('theme-icon-sun');
+      var moon = document.getElementById('theme-icon-moon');
+      function syncIcons() {
+        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        if (sun && moon) {
+          sun.style.display = isDark ? 'block' : 'none';
+          moon.style.display = isDark ? 'none' : 'block';
+        }
+      }
+      syncIcons();
+      if (btn) {
+        btn.addEventListener('click', function() {
+          var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+          if (isDark) {
+            document.documentElement.removeAttribute('data-theme');
+            try { localStorage.setItem('padra_theme', 'light'); } catch (e) {}
+          } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            try { localStorage.setItem('padra_theme', 'dark'); } catch (e) {}
+          }
+          syncIcons();
+        });
+      }
+    })();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -137,7 +137,13 @@
         <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
         <div class="field">
           <label>هامش / دستور مدیرعامل شرکت پادرا (اختیاری)</label>
-          <textarea name="comment" rows="2" maxlength="1000" placeholder="توضیحات یا اولویت تأمین جهت اطلاع مدیر خرید داخلی گروه صنعتی سرکان..."></textarea>
+          <textarea id="decision-comment" name="comment" rows="2" maxlength="1000" placeholder="توضیحات یا اولویت تأمین جهت اطلاع مدیر خرید داخلی گروه صنعتی سرکان..."></textarea>
+          <div class="quick-chips-row">
+            <span class="quick-chips-label">درج سریع هامش:</span>
+            <button type="button" class="quick-chip" onclick="setDecisionComment('با توجه به ضرورت خط تولید پادرا مورد تأیید است؛ لطفاً با اولویت از طریق مدیریت خرید سرکان تأمین گردد.')">ضرورت خط تولید پادرا</button>
+            <button type="button" class="quick-chip" onclick="setDecisionComment('مطابق بودجه مصوب تولید مورد تأیید است؛ جهت تأمین به واحد خرید داخلی سرکان ارجاع شود.')">مطابق بودجه مصوب</button>
+            <button type="button" class="quick-chip" onclick="setDecisionComment('مورد تأیید است؛ لطفاً از تأمین‌کنندگان مجاز گروه صنعتی سرکان استعلام و خریداری گردد.')">تأمین از وندورهای مجاز</button>
+          </div>
         </div>
         <div class="form-actions">
           <button class="btn primary" name="decision" value="approved">✓ تأیید مدیرعامل پادرا و احاله به مدیر خرید داخلی سرکان</button>
@@ -182,7 +188,13 @@
         </div>
         <div class="field full-field">
           <label>دستور خرید و نکات ارجاع مدیر خرید داخلی سرکان به کارشناس منتخب</label>
-          <textarea name="comment" rows="2" maxlength="1000" placeholder="مثلاً: لطفاً ضمن اخذ حداقل ۳ استعلام بها از تأمین‌کنندگان مجاز، حداکثر ظرف ۴۸ ساعت نسبت به خرید اقدام شود..."></textarea>
+          <textarea id="decision-comment" name="comment" rows="2" maxlength="1000" placeholder="مثلاً: لطفاً ضمن اخذ حداقل ۳ استعلام بها از تأمین‌کنندگان مجاز، حداکثر ظرف ۴۸ ساعت نسبت به خرید اقدام شود..."></textarea>
+          <div class="quick-chips-row">
+            <span class="quick-chips-label">درج سریع دستور خرید:</span>
+            <button type="button" class="quick-chip" onclick="setDecisionComment('لطفاً ضمن اخذ حداقل ۳ استعلام بها از تأمین‌کنندگان مجاز، در اسرع وقت نسبت به خرید و ارسال به انبار پادرا اقدام نمایید.')">اخذ ۳ استعلام بها و خرید</button>
+            <button type="button" class="quick-chip" onclick="setDecisionComment('با توجه به فوریت خط تولید شرکت پادرا، حداکثر ظرف ۴۸ ساعت تأمین و حواله بارگیری صادر گردد.')">تأمین فوری ۴۸ ساعته</button>
+            <button type="button" class="quick-chip" onclick="setDecisionComment('مطابق قرارداد سالانه تأمین‌کنندگان گروه سرکان سفارش‌گذاری و هماهنگی تحویل با انبار پادرا انجام شود.')">سفارش‌گذاری طبق قرارداد سالانه</button>
+          </div>
         </div>
         <div class="form-actions">
           <button class="btn primary" name="decision" value="approved">✓ تأیید و محول‌سازی به کارشناس خرید منتخب</button>
@@ -202,12 +214,17 @@
         <div class="form-grid two-cols">
           <div class="field">
             <label>شماره پیش‌فاکتور / سفارش خرید و نام تأمین‌کننده</label>
-            <input name="po_reference" placeholder="مثلاً پیش‌فاکتور ۱۴۰۵/۴۱۲ - شرکت تامین صنعت">
+            <input id="po-ref-input" name="po_reference" placeholder="مثلاً پیش‌فاکتور ۱۴۰۵/۴۱۲ - شرکت تامین صنعت">
           </div>
           <div class="field">
             <label>گزارش اقدام و توضیحات نهایی کارشناس خرید</label>
-            <input name="comment" maxlength="1000" placeholder="نحوه ارسال، زمان تحویل به انبار پادرا و توضیحات تکمیلی...">
+            <input id="decision-comment" name="comment" maxlength="1000" placeholder="نحوه ارسال، زمان تحویل به انبار پادرا و توضیحات تکمیلی...">
           </div>
+        </div>
+        <div class="quick-chips-row">
+          <span class="quick-chips-label">ثبت سریع گزارش تأمین:</span>
+          <button type="button" class="quick-chip" onclick="fillSpecialistDemo('PO-1405-8840 · تأمین‌کننده مجاز سرکان', 'سفارش‌گذاری قطعی انجام شد و حواله بارگیری به مقصد انبار کارخانه پادرا صادر گردید.')">نمونه تکمیل خرید و صدور حواله انبار</button>
+          <button type="button" class="quick-chip" onclick="fillSpecialistDemo('INV-1405-309 · بازرگانی صنعت‌پارت', 'پس از اخذ ۳ استعلام بها، خرید انجام و کالا تحویل انبار پادرا گردید.')">نمونه خرید پس از ۳ استعلام بها</button>
         </div>
         <div class="form-actions">
           <button class="btn primary" name="decision" value="approved">✓ ثبت انجام سفارش‌گذاری و تکمیل نهایی خرید</button>
@@ -388,4 +405,21 @@
     <div class="empty-inline">هنوز رویدادی در تاریخچه این درخواست ثبت نشده است.</div>
   {% endif %}
 </section>
+{% endblock %}
+{% block scripts %}
+<script>
+  function setDecisionComment(text) {
+    var el = document.getElementById('decision-comment');
+    if (el) {
+      el.value = text;
+      el.focus();
+    }
+  }
+  function fillSpecialistDemo(poRef, commentText) {
+    var po = document.getElementById('po-ref-input');
+    var cm = document.getElementById('decision-comment');
+    if (po) po.value = poRef;
+    if (cm) cm.value = commentText;
+  }
+</script>
 {% endblock %}

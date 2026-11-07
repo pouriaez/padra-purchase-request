@@ -15,7 +15,9 @@
 
 <section class="workflow-pipeline-card no-print">
   <div class="pipeline-step">
-    <span class="p-num">گام آغازین · ثبت سفارش</span>
+    <div class="p-head-row">
+      <span class="p-num">گام آغازین · ثبت سفارش</span>
+    </div>
     <b>کارشناس شرکت پادرا</b>
     <small>ثبت درخواست خرید و اقلام موردنیاز</small>
   </div>
@@ -114,18 +116,18 @@
       <h2>فهرست درخواست‌های خرید شرکت پادرا</h2>
       <p>برای بررسی جزئیات، تأیید مرحله، انتخاب کارشناس خرید یا مشاهده تاریخچه روی شماره درخواست کلیک کنید.</p>
     </div>
-    <span class="count">{{rows|length}} مورد</span>
+    <span class="count" id="visible-rows-count">{{rows|length}} مورد</span>
   </div>
   <form class="filter-bar" method="get" action="{{url_for('index')}}">
-    <input name="q" value="{{search_text}}" placeholder="جستجو بر اساس شماره درخواست، واحد، شرح یا نام ثبت‌کننده...">
-    <select name="status">
+    <input id="quick-search-input" name="q" value="{{search_text}}" placeholder="جستجو بر اساس شماره درخواست، واحد، شرح یا نام ثبت‌کننده...">
+    <select name="status" onchange="this.form.submit()">
       <option value="">همه وضعیت‌ها</option>
       <option value="my_turn" {% if status_filter=='my_turn' %}selected{% endif %}>کارتابل اقدام من (نوبت من)</option>
       <option value="pending" {% if status_filter=='pending' %}selected{% endif %}>در جریان گردش تأیید و خرید</option>
       <option value="approved" {% if status_filter=='approved' %}selected{% endif %}>سفارش‌گذاری و تکمیل شده</option>
       <option value="rejected" {% if status_filter=='rejected' %}selected{% endif %}>رد شده</option>
     </select>
-    <select name="req_type">
+    <select name="req_type" onchange="this.form.submit()">
       <option value="">همه انواع اقلام</option>
       <option value="goods" {% if type_filter=='goods' %}selected{% endif %}>مواد اولیه تولید</option>
       <option value="equipment" {% if type_filter=='equipment' %}selected{% endif %}>تجهیزات و قطعات</option>
@@ -137,7 +139,7 @@
   </form>
   {% if rows %}
   <div class="table-wrap">
-    <table class="tracking-table">
+    <table class="tracking-table" id="requests-table">
       <thead>
         <tr>
           <th>شماره درخواست</th>
@@ -155,13 +157,13 @@
       {% for r in rows %}
         {% set req_user = user_info(r[7]) %}
         {% set reason_str = r[14] or '' %}
-        <tr class="{% if r[5]=='pending' and r[9]==username %}row-my-turn{% endif %}">
+        <tr class="request-row {% if r[5]=='pending' and r[9]==username %}row-my-turn{% endif %}">
           <td>
             <div class="req-no-line">
               <a class="request-no" href="{{url_for('view_request',request_id=r[0])}}">{{r[1] or ('#'~r[0])}}</a>
-              {% if '[فوریت: آنی' in reason_str %}
+              {% if '[آنی' in reason_str or '[فوریت: آنی' in reason_str %}
                 <span class="prio-badge critical">آنی / توقف خط</span>
-              {% elif '[فوریت: فوری' in reason_str %}
+              {% elif '[فوری' in reason_str or '[فوریت: فوری' in reason_str %}
                 <span class="prio-badge urgent">فوری</span>
               {% endif %}
             </div>
@@ -224,4 +226,29 @@
   </div>
   {% endif %}
 </section>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function() {
+    var searchInput = document.getElementById('quick-search-input');
+    var table = document.getElementById('requests-table');
+    var countBadge = document.getElementById('visible-rows-count');
+    if (searchInput && table) {
+      var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.request-row'));
+      searchInput.addEventListener('input', function() {
+        var q = searchInput.value.trim().toLowerCase();
+        var visible = 0;
+        rows.forEach(function(row) {
+          var text = row.textContent.toLowerCase();
+          var match = !q || text.indexOf(q) !== -1;
+          row.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+        if (countBadge) {
+          countBadge.textContent = visible + ' مورد';
+        }
+      });
+    }
+  })();
+</script>
 {% endblock %}

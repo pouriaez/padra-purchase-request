@@ -28,7 +28,7 @@ except ImportError:
     pyodbc = None
 
 LOCAL_DB_PATH = BASE_DIR / "padra_workflow.db"
-load_dotenv(dotenv_path=BASE_DIR / ".env", override=False)
+load_dotenv(dotenv_path=BASE_DIR / ".env", override=True)
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or "padra-serkan-bi-secret-key-2026"
@@ -619,8 +619,6 @@ def db_connect(auth=False):
             prefix = "AUTH_DB_" if auth else "DATA_DB_"
             app.logger.exception("%s SQL Server connection failed", prefix)
             raise RuntimeError(prefix + " SQL Server connection failed. Check server, database, ODBC driver, network access and SQL login credentials.") from exc
-    if os.getenv("ALLOW_SQLITE_FALLBACK", "false").strip().lower() not in {"1", "true", "yes", "on"}:
-        raise RuntimeError("SQL Server credentials are not configured and SQLite preview mode is disabled.")
     return SQLiteCompatConnection(LOCAL_DB_PATH)
 
 
@@ -967,7 +965,8 @@ def index():
                     COALESCE(p.approver_title,N'') AS current_title,
                     COALESCE(p.step_no,0) AS current_step,
                     COALESCE(st.total_steps,0) AS total_steps,
-                    COALESCE(it.item_count,0) AS item_count
+                    COALESCE(it.item_count,0) AS item_count,
+                    COALESCE(r.request_reason,N'') AS request_reason
                FROM Project.requests r
                OUTER APPLY (
                    SELECT TOP (1) a.approver_username,a.approver_title,a.step_no

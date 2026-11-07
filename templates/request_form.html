@@ -7,8 +7,21 @@
     <h1>ثبت فرم درخواست خرید و سفارش‌گذاری (شرکت پادرا)</h1>
     <p>پس از ثبت توسط کارشناس پادرا، درخواست به کارتابل <b>مدیرعامل شرکت پادرا</b> و سپس به <b>مدیر خرید داخلی گروه صنعتی سرکان</b> جهت تعیین کارشناس خرید ارجاع می‌شود.</p>
   </div>
-  <a class="btn secondary" href="{{url_for('index')}}">بازگشت به داشبورد</a>
+  <div class="head-actions">
+    <a class="btn secondary" href="{{url_for('index')}}">بازگشت به داشبورد</a>
+  </div>
 </section>
+
+<div class="preset-bar no-print">
+  <div class="preset-bar-title">
+    <span>⚡ پرکردن سریع فرم نمونه (ویژه تست و ارائه مدیریتی):</span>
+  </div>
+  <div class="preset-buttons">
+    <button type="button" class="quick-chip" onclick="applyFormPreset('equipment')">نمونه ۱: قطعات صنعتی فوری (نت پادرا)</button>
+    <button type="button" class="quick-chip" onclick="applyFormPreset('goods')">نمونه ۲: مواد اولیه خط تولید (کاغذ مدیا و چسب)</button>
+    <button type="button" class="quick-chip" onclick="applyFormPreset('service')">نمونه ۳: خدمات فنی و کالیبراسیون</button>
+  </div>
+</div>
 
 <form method="post" id="purchase-form">
   <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
@@ -39,7 +52,7 @@
     <div class="form-grid">
       <div class="field">
         <label>نوع اقلام درخواستی *</label>
-        <select name="request_type" required>
+        <select id="f-request-type" name="request_type" required>
           <option value="goods">مواد اولیه تولید</option>
           <option value="equipment">تجهیزات، قطعات و ماشین‌آلات</option>
           <option value="service">خدمات فنی و پیمانکاری</option>
@@ -48,7 +61,7 @@
       </div>
       <div class="field">
         <label>واحد درخواست‌کننده در شرکت پادرا *</label>
-        <input name="unit_name" required list="padra-units" placeholder="انتخاب یا تایپ واحد (مثلاً تولید، نت، آزمایشگاه)">
+        <input id="f-unit-name" name="unit_name" required list="padra-units" placeholder="انتخاب یا تایپ واحد (مثلاً تولید، نت، آزمایشگاه)">
         <datalist id="padra-units">
           <option value="تولید و مونتاژ - پادرا">
           <option value="نگهداری و تعمیرات (نت) - پادرا">
@@ -60,7 +73,7 @@
       </div>
       <div class="field">
         <label>محل و نحوه تأمین *</label>
-        <select name="supply_location" required>
+        <select id="f-supply-location" name="supply_location" required>
           <option value="خرید داخلی (گروه صنعتی سرکان)" selected>خرید داخلی (گروه صنعتی سرکان)</option>
           <option value="انبار مرکزی">انبار مرکزی پادرا / سرکان</option>
           <option value="خرید خارجی / بازرگانی">خرید خارجی / بازرگانی</option>
@@ -69,7 +82,7 @@
       </div>
       <div class="field">
         <label>سطح فوریت سفارش *</label>
-        <select name="priority" required>
+        <select id="f-priority" name="priority" required>
           <option value="عادی" selected>عادی (طبق برنامه تدارکات)</option>
           <option value="فوری">فوری (اولویت بالا در خرید)</option>
           <option value="آنی / توقف خط">آنی / جلوگیری از توقف خط تولید</option>
@@ -78,21 +91,32 @@
       <div class="field">
         <label>دارایی ثابت / سرمایه‌ای؟</label>
         <div class="choice-line">
-          <label><input type="radio" name="fixed_asset" value="yes"> بله (دارایی ثابت)</label>
-          <label><input type="radio" name="fixed_asset" value="no" checked> خیر (مصرفی / جاری)</label>
+          <label><input type="radio" name="fixed_asset" value="yes" id="fa-yes"> بله (دارایی ثابت)</label>
+          <label><input type="radio" name="fixed_asset" value="no" id="fa-no" checked> خیر (مصرفی / جاری)</label>
         </div>
       </div>
     </div>
 
     <div class="field full-field">
       <label>توضیحات، ضرورت خرید و مشخصات فنی تکمیلی</label>
-      <textarea name="request_reason" rows="2" placeholder="علت درخواست، اولویت خط تولید، برند یا استاندارد موردنیاز را درج نمایید..."></textarea>
+      <textarea id="f-reason" name="request_reason" rows="2" placeholder="علت درخواست، اولویت خط تولید، برند یا استاندارد موردنیاز را درج نمایید..."></textarea>
     </div>
 
     <div class="section-caption items-caption">
       <span>۲. فهرست اقلام و کالاهای موردنیاز</span>
       <button type="button" class="btn secondary small" id="add-row">＋ افزودن ردیف کالا</button>
     </div>
+
+    <datalist id="common-units">
+      <option value="عدد">
+      <option value="کیلوگرم">
+      <option value="متر">
+      <option value="مترمربع">
+      <option value="دستگاه">
+      <option value="بسته">
+      <option value="لیتر">
+      <option value="ست">
+    </datalist>
 
     <div class="table-wrap items-wrap">
       <table class="items-table">
@@ -113,7 +137,7 @@
             <td class="row-number">۱</td>
             <td><input name="item_code[]" placeholder="مثلاً PDR-101"></td>
             <td><input name="item_description[]" required placeholder="شرح کامل فنی و مشخصات کالا"></td>
-            <td><input name="item_unit[]" required placeholder="عدد / کیلوگرم / متر"></td>
+            <td><input name="item_unit[]" list="common-units" required placeholder="عدد / کیلوگرم / متر"></td>
             <td><input name="quantity[]" required type="number" min="0.001" step="0.001" placeholder="۰"></td>
             <td><input name="needed_date[]" required value="{{today}}" placeholder="۱۴۰۵/۰۸/۱۵"></td>
             <td><input name="usage_location[]" required placeholder="مثلاً خط تولید ۱ / سالن مونتاژ"></td>
@@ -157,27 +181,91 @@
 {% endblock %}
 {% block scripts %}
 <script>
-const body=document.getElementById('items-body');
-const faDigits=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
-function renumber(){
-  [...body.querySelectorAll('.item-row')].forEach((r,i)=>r.querySelector('.row-number').textContent=faDigits(i+1));
+const body = document.getElementById('items-body');
+const faDigits = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
+function renumber() {
+  [...body.querySelectorAll('.item-row')].forEach((r, i) => r.querySelector('.row-number').textContent = faDigits(i + 1));
 }
-document.getElementById('add-row').addEventListener('click',()=>{
-  const row=body.querySelector('.item-row').cloneNode(true);
-  row.querySelectorAll('input').forEach((el)=>{
-    if(el.name==='needed_date[]') el.value='{{today}}';
-    else el.value='';
-  });
+function addRowWithValues(data) {
+  const row = body.querySelector('.item-row').cloneNode(true);
+  const inputs = row.querySelectorAll('input');
+  inputs[0].value = (data && data.code) || '';
+  inputs[1].value = (data && data.desc) || '';
+  inputs[2].value = (data && data.unit) || '';
+  inputs[3].value = (data && data.qty) || '';
+  inputs[4].value = (data && data.date) || '{{today}}';
+  inputs[5].value = (data && data.loc) || '';
   body.appendChild(row);
   renumber();
+}
+document.getElementById('add-row').addEventListener('click', () => {
+  addRowWithValues(null);
 });
-body.addEventListener('click',e=>{
-  if(e.target.classList.contains('remove-row')){
-    if(body.querySelectorAll('.item-row').length>1){
+body.addEventListener('click', e => {
+  if (e.target.classList.contains('remove-row')) {
+    if (body.querySelectorAll('.item-row').length > 1) {
       e.target.closest('tr').remove();
       renumber();
     }
   }
 });
+function applyFormPreset(kind) {
+  const presets = {
+    equipment: {
+      type: 'equipment',
+      unit: 'نگهداری و تعمیرات (نت) - پادرا',
+      priority: 'فوری',
+      fixed: true,
+      reason: 'تأمین قطعات یدکی گیربکس و سنسور نوری خط تولید فیلتر هوا جهت جلوگیری از توقف شیفت تولید',
+      items: [
+        { code: 'PDR-EQ-901', desc: 'الکتروموتور سه فاز ۵.۵ کیلووات زیمنس دور ۱۴۰۰', unit: 'دستگاه', qty: '2', date: '{{today}}', loc: 'خط تولید فیلتر هوا - سالن ۱' },
+        { code: 'PDR-EQ-908', desc: 'سنسور نوری صنعتی سیک (SICK) مدل ضدغبار', unit: 'عدد', qty: '6', date: '{{today}}', loc: 'خط بسته‌بندی اتوماتیک پادرا' }
+      ]
+    },
+    goods: {
+      type: 'goods',
+      unit: 'تولید و مونتاژ - پادرا',
+      priority: 'عادی',
+      fixed: false,
+      reason: 'سفارش‌گذاری مواد اولیه مصرفی جهت برنامه تولید ماه جاری کارخانه پادرا',
+      items: [
+        { code: 'PDR-RM-118', desc: 'رول کاغذ مدیا فیلتر هوای سنگین عرض ۳۱۰ میلی‌متر', unit: 'کیلوگرم', qty: '1500', date: '{{today}}', loc: 'سالن چین‌کنی کاغذ پادرا' },
+        { code: 'PDR-RM-224', desc: 'پلی‌اورتان دو جزئی فوم سرد آب‌بندی فیلتر', unit: 'کیلوگرم', qty: '450', date: '{{today}}', loc: 'ایستگاه تزریق فوم' }
+      ]
+    },
+    service: {
+      type: 'service',
+      unit: 'کنترل کیفیت و آزمایشگاه - پادرا',
+      priority: 'فوری',
+      fixed: false,
+      reason: 'انجام خدمات کالیبراسیون دوره‌ای تجهیزات آزمایشگاهی و صدور گواهینامه استاندارد',
+      items: [
+        { code: 'PDR-SRV-305', desc: 'کالیبراسیون تخصصی دستگاه تست نفوذپذیری و فشارسنج‌های مرجع', unit: 'دستگاه', qty: '4', date: '{{today}}', loc: 'آزمایشگاه کنترل کیفیت پادرا' }
+      ]
+    }
+  };
+  const p = presets[kind];
+  if (!p) return;
+  document.getElementById('f-request-type').value = p.type;
+  document.getElementById('f-unit-name').value = p.unit;
+  document.getElementById('f-priority').value = p.priority;
+  document.getElementById(p.fixed ? 'fa-yes' : 'fa-no').checked = true;
+  document.getElementById('f-reason').value = p.reason;
+  while (body.querySelectorAll('.item-row').length > 1) {
+    body.lastElementChild.remove();
+  }
+  const firstInputs = body.querySelector('.item-row').querySelectorAll('input');
+  const first = p.items[0];
+  firstInputs[0].value = first.code;
+  firstInputs[1].value = first.desc;
+  firstInputs[2].value = first.unit;
+  firstInputs[3].value = first.qty;
+  firstInputs[4].value = first.date;
+  firstInputs[5].value = first.loc;
+  for (let i = 1; i < p.items.length; i++) {
+    addRowWithValues(p.items[i]);
+  }
+  renumber();
+}
 </script>
 {% endblock %}
