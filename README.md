@@ -19,10 +19,10 @@
    `python -m venv .venv`
    `.venv\\Scripts\\activate`
    `pip install -r requirements-windows.txt`
-5. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
-6. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
-7. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).
-8. آدرس برنامه: `http://SERVER:3942`
+6. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
+7. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
+8. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).
+9. آدرس برنامه: `http://SERVER:3942`
 
 ## مجوزهای SQL
 - دیتابیس احراز هویت: دسترسی SELECT به `[Project].[loginusers]`.
