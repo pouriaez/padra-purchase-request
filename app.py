@@ -129,8 +129,7 @@ def get_purchase_specialists():
         conn = auth_db()
         cur = conn.cursor()
         cur.execute(
-            """SELECT DISTINCT u.username,
-                      COALESCE(NULLIF(u.full_name, ''), u.username) AS full_name
+            """SELECT DISTINCT u.username
                FROM Project.loginusers u
                INNER JOIN Project.IAM_UserRoles ur ON ur.user_id = u.id
                INNER JOIN Project.IAM_Roles r ON r.id = ur.role_id
@@ -142,10 +141,11 @@ def get_purchase_specialists():
                  AND p.project_key = 'padra-purchase-request'
                ORDER BY u.username"""
         )
+        display_names = {item["username"]: item["full_name"] for item in PURCHASE_SPECIALIST_FALLBACKS}
         return [
             {
                 "username": row[0],
-                "full_name": row[1],
+                "full_name": display_names.get(row[0], row[0]),
                 "role_title": "کارشناس خرید داخلی",
                 "org": "گروه صنعتی سرکان",
                 "badge_color": "teal",
