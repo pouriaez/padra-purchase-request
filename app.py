@@ -703,6 +703,14 @@ def validate_jalali_date(value, label):
 
 
 def user_display_info(username: str) -> dict:
+    if username == "karid_padra":
+        return {
+            "username": username,
+            "full_name": "کارشناس خرید پادرا",
+            "role_title": "ثبت‌کننده درخواست خرید",
+            "org": "شرکت پادرا",
+            "badge_color": "blue",
+        }
     info = ORGANIZATIONAL_USERS.get(username)
     if info:
         return info
