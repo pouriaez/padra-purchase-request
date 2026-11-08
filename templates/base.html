@@ -68,35 +68,6 @@
     </div>
   </header>
 
-  <div class="role-switcher-bar no-print">
-    <div class="role-switcher-inner">
-      <span class="switcher-label">⇄ تغییر سریع کارتابل (گردش کار پادرا ← سرکان):</span>
-      <div class="switcher-links">
-        <a href="{{url_for('switch_user', username='padra_expert')}}" class="role-chip {% if username=='padra_expert' %}active{% endif %}">
-          <span class="step-dot">۰</span> کارشناس پادرا (ثبت‌کننده)
-        </a>
-        <a href="{{url_for('switch_user', username='ceo_padra')}}" class="role-chip {% if username=='ceo_padra' %}active{% endif %}">
-          <span class="step-dot">۱</span> مدیرعامل شرکت پادرا
-        </a>
-        <a href="{{url_for('switch_user', username='serkan_purchase_mgr')}}" class="role-chip {% if username=='serkan_purchase_mgr' %}active{% endif %}">
-          <span class="step-dot">۲</span> مدیر خرید داخلی سرکان
-        </a>
-        <a href="{{url_for('switch_user', username='kharid_expert_1')}}" class="role-chip {% if username=='kharid_expert_1' %}active{% endif %}">
-          <span class="step-dot">۳ الف</span> کارشناس خرید ۱ (رضایی - فنی)
-        </a>
-        <a href="{{url_for('switch_user', username='kharid_expert_2')}}" class="role-chip {% if username=='kharid_expert_2' %}active{% endif %}">
-          <span class="step-dot">۳ ب</span> کارشناس خرید ۲ (محمدی - مواد)
-        </a>
-        <a href="{{url_for('switch_user', username='kharid_expert_3')}}" class="role-chip {% if username=='kharid_expert_3' %}active{% endif %}">
-          <span class="step-dot">۳ ج</span> کارشناس خرید ۳ (کریمی - خدمات)
-        </a>
-        <a href="{{url_for('switch_user', username='admin')}}" class="role-chip {% if username=='admin' %}active{% endif %}">
-          <span class="step-dot">BI</span> مدیر سیستم (هوش تجاری)
-        </a>
-      </div>
-    </div>
-  </div>
-
   <main class="container">
     {% with messages=get_flashed_messages(with_categories=true) %}
       {% if messages %}
