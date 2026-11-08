@@ -27,7 +27,7 @@
 9. آدرس برنامه: `http://SERVER:3942`
 
 ## مجوزهای SQL
-- دیتابیس احراز هویت: دسترسی SELECT به `[Project].[loginusers]`.
+- دیتابیس احراز هویت و IAM (`AUTH_DB_NAME=bi`): دسترسی SELECT به `[Project].[loginusers]` و جداول `[Project].[IAM_Projects]`، `[Project].[IAM_Roles]`، `[Project].[IAM_UserRoles]`، `[Project].[IAM_Permissions]` و `[Project].[IAM_RolePermissions]`.
 - دیتابیس درخواست خرید: دسترسی SELECT/INSERT/UPDATE به جداول schema `Project`.
 - حساب برنامه نباید دسترسی DDL داشته باشد؛ اسکریپت ساخت جداول را مدیر دیتابیس اجرا کند.
 
