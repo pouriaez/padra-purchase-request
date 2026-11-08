@@ -988,7 +988,10 @@ def index():
         is_full_visibility = current_user.username in {
             "admin", "ceo_padra", "serkan_purchase_mgr", "padra_expert"
         }
-        if is_full_visibility:
+        if current_user.username == "karid_padra":
+            visibility = "r.requester_username=?"
+            vis_params = [current_user.username]
+        elif is_full_visibility:
             visibility = "1=1"
             vis_params = []
         else:
@@ -1008,16 +1011,19 @@ def index():
             if status_name in counts:
                 counts[status_name] = total
 
-        cur.execute(
-            """SELECT COUNT(DISTINCT r.id)
-               FROM Project.requests r
-               INNER JOIN Project.approvals a ON a.request_id = r.id
-               WHERE r.status = 'pending' AND a.decision = 'pending' AND a.approver_username = ?""",
-            current_user.username,
-        )
-        counts["my_turn"] = cur.fetchone()[0] or 0
-
-        bi_stats = compute_bi_analytics(cur)
+        if current_user.username == "karid_padra":
+            counts["my_turn"] = 0
+            bi_stats = None
+        else:
+            cur.execute(
+                """SELECT COUNT(DISTINCT r.id)
+                   FROM Project.requests r
+                   INNER JOIN Project.approvals a ON a.request_id = r.id
+                   WHERE r.status = 'pending' AND a.decision = 'pending' AND a.approver_username = ?""",
+                current_user.username,
+            )
+            counts["my_turn"] = cur.fetchone()[0] or 0
+            bi_stats = compute_bi_analytics(cur)
 
         where = visibility
         params = list(vis_params)
@@ -1313,15 +1319,21 @@ def view_request(request_id):
     if not data:
         abort(404)
     h = data["header"]
-    is_privileged = current_user.username in {"admin", "ceo_padra", "serkan_purchase_mgr", "padra_expert"}
-    if not is_privileged and h[8] != current_user.username and not any(a[1] == current_user.username for a in data["approvals"]):
-        abort(403)
+    if current_user.username == "karid_padra":
+        if h[8] != current_user.username:
+            abort(403)
+    else:
+        is_privileged = current_user.username in {"admin", "ceo_padra", "serkan_purchase_mgr", "padra_expert"}
+        if not is_privileged and h[8] != current_user.username and not any(a[1] == current_user.username for a in data["approvals"]):
+            abort(403)
     return render_template("request_detail.html", data=data, username=current_user.username)
 
 
 @app.route("/request/<int:request_id>/decision", methods=["POST"])
 @login_required
 def decide_request(request_id):
+    if current_user.username == "karid_padra":
+        abort(403)
     decision = request.form.get("decision", "").strip()
     comment = request.form.get("comment", "").strip()
     selected_specialist = request.form.get("assigned_specialist", "").strip()
@@ -1514,7 +1526,7 @@ def decide_request(request_id):
 @login_required
 def reassign_specialist(request_id):
     """امکان تغییر کارشناس خرید توسط مدیر خرید داخلی گروه صنعتی سرکان در مرحله ۳."""
-    if current_user.username not in {"serkan_purchase_mgr", "admin"}:
+    if current_user.username == "karid_padra" or current_user.username not in {"serkan_purchase_mgr", "admin"}:
         abort(403)
     new_specialist = request.form.get("assigned_specialist", "").strip()
     note = request.form.get("reassign_note", "").strip()
