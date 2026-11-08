@@ -1077,6 +1077,8 @@ def index():
 @login_required
 def export_csv():
     """خروجی اکسل (CSV با UTF-8 BOM) ویژه گزارش‌گیری مدیریتی واحد هوش تجاری سرکان."""
+    if current_user.username == "karid_padra":
+        abort(403)
     conn = data_db()
     try:
         cur = conn.cursor()
