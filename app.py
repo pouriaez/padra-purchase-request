@@ -869,6 +869,7 @@ def inject_organizational_context():
         "purchase_specialists": get_purchase_specialists(),
         "user_info": user_display_info,
         "current_user_info": user_display_info(current_user.username) if current_user.is_authenticated else None,
+        "has_iam_permission": has_iam_permission,
     }
 
 
