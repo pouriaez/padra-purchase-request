@@ -14,8 +14,10 @@
 
 ## راه‌اندازی
 1. Python 3.11+ و ODBC Driver 17 یا 18 نصب باشد.
-2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس `bi` اجرا کنید.\n3. در همان دیتابیس، اسکریپت‌های IAM مخزن `serkan-iam` را به ترتیب `sql/001_create_iam_schema.sql`، `sql/002_seed_padra_purchase_permissions.sql` و `sql/003_padra_rbac_enforcement.sql` اجرا کنید.
-4. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
+2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس `bi` اجرا کنید.
+3. فایل `sql/002_align_approval_users_with_iam.sql` را اجرا کنید تا ارجاع مرحله اول به `admin` و مرحله دوم به `m.mahdiyon` مطابق تخصیص نقش‌های IAM باشد.
+4. در همان دیتابیس، اسکریپت‌های IAM مخزن `serkan-iam` را به ترتیب `sql/001_create_iam_schema.sql`، `sql/002_seed_padra_purchase_permissions.sql` و `sql/003_padra_rbac_enforcement.sql` اجرا کنید.
+5. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
    `python -m venv .venv`
    `.venv\\Scripts\\activate`
    `pip install -r requirements-windows.txt`
