@@ -949,7 +949,7 @@ def get_request(request_id):
             request_id,
         )
         history = cur.fetchall()
-        bi_stats = compute_bi_analytics(cur)
+        bi_stats = compute_bi_analytics(cur) if has_iam_permission("requests.view_all") else None
         return {
             "header": header,
             "items": items,
@@ -1139,7 +1139,7 @@ def index():
 @login_required
 def export_csv():
     """خروجی اکسل (CSV با UTF-8 BOM) ویژه گزارش‌گیری مدیریتی واحد هوش تجاری سرکان."""
-    if not has_iam_permission("requests.export"):
+    if not has_iam_permission("requests.export") or not has_iam_permission("requests.view_all"):
         abort(403)
     conn = data_db()
     try:
