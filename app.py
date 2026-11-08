@@ -17,7 +17,7 @@ if VENDOR_DIR.exists() and str(VENDOR_DIR) not in sys.path:
 
 import jdatetime
 from dotenv import load_dotenv
-from flask import Flask, Response, flash, redirect, render_template, request, url_for, abort, session
+from flask import Flask, Response, flash, redirect, render_template, request, url_for, abort, session, g
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.exceptions import HTTPException
@@ -144,25 +144,17 @@ def get_purchase_specialists():
         display_names = {item["username"]: item["full_name"] for item in PURCHASE_SPECIALIST_FALLBACKS}
         return [
             {
-                "username": row[0],
-                "full_name": display_names.get(row[0], row[0]),
+                "username": item[0],
+                "full_name": display_names.get(item[0], item[0]),
                 "role_title": "کارشناس خرید داخلی",
                 "org": "گروه صنعتی سرکان",
                 "badge_color": "teal",
             }
-            for row in cur.fetchall()
+            for item in cur.fetchall()
         ]
     except Exception:
         app.logger.exception("Unable to load purchase specialists from central IAM")
-        return [
-            {
-                **item,
-                "role_title": "کارشناس خرید داخلی",
-                "org": "گروه صنعتی سرکان",
-                "badge_color": "teal",
-            }
-            for item in PURCHASE_SPECIALIST_FALLBACKS
-        ]
+        return []
     finally:
         if cur:
             cur.close()
@@ -703,14 +695,6 @@ def validate_jalali_date(value, label):
 
 
 def user_display_info(username: str) -> dict:
-    if username == "karid_padra":
-        return {
-            "username": username,
-            "full_name": "کارشناس خرید پادرا",
-            "role_title": "ثبت‌کننده درخواست خرید",
-            "org": "شرکت پادرا",
-            "badge_color": "blue",
-        }
     info = ORGANIZATIONAL_USERS.get(username)
     if info:
         return info
@@ -801,6 +785,67 @@ def load_user(user_id):
             cur.close()
         if conn:
             conn.close()
+
+
+def current_iam_permissions():
+    if not current_user.is_authenticated:
+        return set()
+    cached = getattr(g, "_iam_permissions", None)
+    if cached is not None:
+        return cached
+    conn = cur = None
+    try:
+        conn = auth_db()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT DISTINCT p.permission_key
+               FROM Project.IAM_UserRoles ur
+               INNER JOIN Project.IAM_Roles r ON r.id = ur.role_id AND r.is_active = 1
+               INNER JOIN Project.IAM_RolePermissions rp ON rp.role_id = r.id
+               INNER JOIN Project.IAM_Permissions p ON p.id = rp.permission_id AND p.is_active = 1
+               INNER JOIN Project.IAM_Projects pr ON pr.id = p.project_id AND pr.is_active = 1
+               WHERE ur.user_id = ?
+                 AND (ur.valid_from IS NULL OR ur.valid_from <= SYSDATETIME())
+                 AND (ur.valid_until IS NULL OR ur.valid_until > SYSDATETIME())
+                 AND pr.project_key = 'padra-purchase-request'""",
+            int(current_user.id),
+        )
+        permissions = {str(row[0]) for row in cur.fetchall()}
+        g._iam_permissions = permissions
+        return permissions
+    except Exception:
+        app.logger.exception("Unable to load permissions from central IAM; access denied")
+        g._iam_permissions = set()
+        return set()
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+def has_iam_permission(permission_key):
+    return permission_key in current_iam_permissions()
+
+
+def request_visibility_clause(permissions):
+    clauses = []
+    params = []
+    if "requests.view_all" in permissions:
+        return "1=1", []
+    if "requests.view_own" in permissions:
+        clauses.append("r.requester_username = ?")
+        params.append(current_user.username)
+    if "requests.view_assigned" in permissions:
+        clauses.append(
+            """(r.assigned_specialist = ? OR EXISTS
+               (SELECT 1 FROM Project.approvals ax
+                WHERE ax.request_id = r.id AND ax.approver_username = ?))"""
+        )
+        params.extend([current_user.username, current_user.username])
+    if not clauses:
+        abort(403)
+    return "(" + " OR ".join(clauses) + ")", params
 
 
 _FALLBACK_ACTIVE_USERNAME = "serkan_purchase_mgr"
