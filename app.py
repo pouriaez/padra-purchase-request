@@ -106,11 +106,71 @@ ORGANIZATIONAL_USERS = {
     },
 }
 
-PURCHASE_SPECIALISTS = [
-    ORGANIZATIONAL_USERS["kharid_expert_1"],
-    ORGANIZATIONAL_USERS["kharid_expert_2"],
-    ORGANIZATIONAL_USERS["kharid_expert_3"],
+PURCHASE_SPECIALIST_FALLBACKS = [
+    {"username": "v.eskandari", "full_name": "وحید اسکندری"},
+    {"username": "sh.ghasemian", "full_name": "شایان قاسمیان"},
+    {"username": "gh.sohrabi", "full_name": "قدرت سهرابی"},
+    {"username": "s.yazdani", "full_name": "سجاد یزدانی"},
+    {"username": "h.arabi", "full_name": "حسین عربی"},
+    {"username": "h.mohebi", "full_name": "حامد محبی"},
+    {"username": "j.safaei", "full_name": "جواد صفایی"},
+    {"username": "b.eskandari", "full_name": "بهنام اسکندری"},
+    {"username": "m.abedi", "full_name": "محمدجواد عابدینی"},
+    {"username": "mb.cheraghi", "full_name": "محمدباقر چراقی"},
+    {"username": "f.botkan", "full_name": "فرانک بُت‌کَن"},
+    {"username": "z.hatami", "full_name": "زهرا حاتمی"},
+    {"username": "a.zafari", "full_name": "آرزو آذرلی"},
 ]
+
+
+def get_purchase_specialists():
+    conn = cur = None
+    try:
+        conn = auth_db()
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT DISTINCT u.username,
+                      COALESCE(NULLIF(u.full_name, ''), u.username) AS full_name
+               FROM Project.loginusers u
+               INNER JOIN Project.IAM_UserRoles ur ON ur.user_id = u.id
+               INNER JOIN Project.IAM_Roles r ON r.id = ur.role_id
+               INNER JOIN Project.IAM_Projects p ON p.id = r.project_id
+               WHERE r.role_key = 'serkan_purchase_specialist'
+                 AND r.is_active = 1
+                 AND (ur.valid_from IS NULL OR ur.valid_from <= SYSDATETIME())
+                 AND (ur.valid_until IS NULL OR ur.valid_until > SYSDATETIME())
+                 AND p.project_key = 'padra-purchase-request'
+               ORDER BY u.username"""
+        )
+        return [
+            {
+                "username": row[0],
+                "full_name": row[1],
+                "role_title": "کارشناس خرید داخلی",
+                "org": "گروه صنعتی سرکان",
+                "badge_color": "teal",
+            }
+            for row in cur.fetchall()
+        ]
+    except Exception:
+        app.logger.exception("Unable to load purchase specialists from central IAM")
+        return [
+            {
+                **item,
+                "role_title": "کارشناس خرید داخلی",
+                "org": "گروه صنعتی سرکان",
+                "badge_color": "teal",
+            }
+            for item in PURCHASE_SPECIALIST_FALLBACKS
+        ]
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
+PURCHASE_SPECIALISTS = PURCHASE_SPECIALIST_FALLBACKS
 
 _ISO_DT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}")
 
@@ -648,6 +708,17 @@ def user_display_info(username: str) -> dict:
     info = ORGANIZATIONAL_USERS.get(username)
     if info:
         return info
+    specialist = next(
+        (item for item in PURCHASE_SPECIALIST_FALLBACKS if item["username"] == username),
+        None,
+    )
+    if specialist:
+        return {
+            **specialist,
+            "role_title": "کارشناس خرید داخلی",
+            "org": "گروه صنعتی سرکان",
+            "badge_color": "teal",
+        }
     return {
         "username": username,
         "full_name": username,
@@ -670,7 +741,7 @@ def compute_bi_analytics(cur) -> dict:
         stage_Waiting[int(step_no)] = int(cnt)
 
     specialist_workloads = {}
-    for sp in PURCHASE_SPECIALISTS:
+    for sp in get_purchase_specialists():
         uname = sp["username"]
         cur.execute(
             """SELECT
@@ -744,7 +815,7 @@ def _auto_authenticate_preview_if_needed():
 def inject_organizational_context():
     return {
         "org_users": ORGANIZATIONAL_USERS,
-        "purchase_specialists": PURCHASE_SPECIALISTS,
+        "purchase_specialists": get_purchase_specialists(),
         "user_info": user_display_info,
         "current_user_info": user_display_info(current_user.username) if current_user.is_authenticated else None,
     }
@@ -1278,11 +1349,11 @@ def decide_request(request_id):
 
         specialist_info = None
         if decision == "approved" and current_step_no == 2:
-            if not selected_specialist or selected_specialist not in {s["username"] for s in PURCHASE_SPECIALISTS}:
+            if not selected_specialist or selected_specialist not in {s["username"] for s in get_purchase_specialists()}:
                 conn.rollback()
                 flash("لطفاً کارشناس خرید موردنظر خود را جهت محول‌سازی سفارش انتخاب نمایید.", "error")
                 return redirect(url_for("view_request", request_id=request_id))
-            specialist_info = ORGANIZATIONAL_USERS[selected_specialist]
+            specialist_info = next(s for s in get_purchase_specialists() if s["username"] == selected_specialist)
 
         full_comment = comment
         if po_reference and current_step_no == 3:
@@ -1433,11 +1504,11 @@ def reassign_specialist(request_id):
         abort(403)
     new_specialist = request.form.get("assigned_specialist", "").strip()
     note = request.form.get("reassign_note", "").strip()
-    if new_specialist not in {s["username"] for s in PURCHASE_SPECIALISTS}:
+    if new_specialist not in {s["username"] for s in get_purchase_specialists()}:
         flash("کارشناس خرید انتخاب‌شده معتبر نیست.", "error")
         return redirect(url_for("view_request", request_id=request_id))
 
-    spec_info = ORGANIZATIONAL_USERS[new_specialist]
+    spec_info = next(s for s in get_purchase_specialists() if s["username"] == new_specialist)
     spec_title = f"{spec_info['role_title']} - {spec_info['full_name']}"
     conn = cur = None
     try:
