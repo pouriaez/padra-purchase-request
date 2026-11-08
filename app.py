@@ -1371,10 +1371,7 @@ def view_request(request_id):
         or ("requests.view_own" in permissions and h[8] == current_user.username)
         or (
             "requests.view_assigned" in permissions
-            and (
-                h[11] == current_user.username
-                or any(a[1] == current_user.username for a in data["approvals"])
-            )
+            and any(a[1] == current_user.username for a in data["approvals"])
         )
     )
     if not can_view:
