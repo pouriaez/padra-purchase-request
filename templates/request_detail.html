@@ -123,7 +123,8 @@
 </section>
 
 {% if h[9]=='pending' and ns.current %}
-  {% set can_act = (ns.current[1] == username) or (username == 'admin') %}
+  {% set can_act = (ns.current[1] == username) and has_iam_permission('requests.approve.step' ~ ns.current[0]) %}
+  {% if ns.current[0] == 2 and not has_iam_permission('requests.assign_specialist') %}{% set can_act = false %}{% endif %}
   {% if can_act %}
   <section class="panel action-workbench no-print">
     {% if ns.current[0] == 1 %}
@@ -234,7 +235,7 @@
   </section>
   {% endif %}
 
-  {% if ns.current[0] == 3 and username in ['serkan_purchase_mgr', 'admin'] %}
+  {% if ns.current[0] == 3 and has_iam_permission('requests.reassign_specialist') %}
   <section class="panel reassign-box no-print">
     <div class="reassign-head">
       <b>⇄ تغییر کارشناس خرید مسئول (ویژه مدیر خرید داخلی سرکان)</b>
