@@ -116,7 +116,7 @@ PURCHASE_SPECIALIST_FALLBACKS = [
     {"username": "j.safaei", "full_name": "جواد صفایی"},
     {"username": "b.eskandari", "full_name": "بهنام اسکندری"},
     {"username": "m.abedi", "full_name": "محمدجواد عابدینی"},
-    {"username": "mb.cheraghi", "full_name": "محمدباقر چراقی"},
+    {"username": "mb.cheraghi", "full_name": "محمدباقر چراغی"},
     {"username": "f.botkan", "full_name": "فرانک بُت‌کَن"},
     {"username": "z.hatami", "full_name": "زهرا حاتمی"},
     {"username": "a.zafari", "full_name": "آرزو آذرلی"},
