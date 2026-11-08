@@ -1030,20 +1030,12 @@ def index():
         if type_filter not in {"goods", "equipment", "service", "other"}:
             type_filter = ""
 
-        is_full_visibility = current_user.username in {
-            "admin", "ceo_padra", "serkan_purchase_mgr", "padra_expert"
+        permissions = current_iam_permissions()
+        visibility, vis_params = request_visibility_clause(permissions)
+        approval_steps = {
+            step for step in (1, 2, 3)
+            if f"requests.approve.step{step}" in permissions
         }
-        if current_user.username == "karid_padra":
-            visibility = "r.requester_username=?"
-            vis_params = [current_user.username]
-        elif is_full_visibility:
-            visibility = "1=1"
-            vis_params = []
-        else:
-            visibility = """(r.requester_username=? OR EXISTS
-                             (SELECT 1 FROM Project.approvals ax
-                              WHERE ax.request_id=r.id AND ax.approver_username=?))"""
-            vis_params = [current_user.username, current_user.username]
 
         cur.execute(
             f"""SELECT r.status,COUNT(*) FROM Project.requests r
@@ -1056,27 +1048,34 @@ def index():
             if status_name in counts:
                 counts[status_name] = total
 
-        if current_user.username == "karid_padra":
-            counts["my_turn"] = 0
-            bi_stats = None
-        else:
+        if approval_steps:
+            step_placeholders = ",".join("?" for _ in approval_steps)
             cur.execute(
-                """SELECT COUNT(DISTINCT r.id)
-                   FROM Project.requests r
-                   INNER JOIN Project.approvals a ON a.request_id = r.id
-                   WHERE r.status = 'pending' AND a.decision = 'pending' AND a.approver_username = ?""",
+                f"""SELECT COUNT(DISTINCT r.id)
+                    FROM Project.requests r
+                    INNER JOIN Project.approvals a ON a.request_id = r.id
+                    WHERE r.status = 'pending' AND a.decision = 'pending'
+                      AND a.approver_username = ? AND a.step_no IN ({step_placeholders})""",
                 current_user.username,
+                *sorted(approval_steps),
             )
             counts["my_turn"] = cur.fetchone()[0] or 0
-            bi_stats = compute_bi_analytics(cur)
+        else:
+            counts["my_turn"] = 0
+        bi_stats = compute_bi_analytics(cur) if "requests.view_all" in permissions else None
 
         where = visibility
         params = list(vis_params)
         if status_filter == "my_turn":
-            where += """ AND r.status='pending' AND EXISTS (
+            if not approval_steps:
+                abort(403)
+            step_placeholders = ",".join("?" for _ in approval_steps)
+            where += f""" AND r.status='pending' AND EXISTS (
                          SELECT 1 FROM Project.approvals am
-                         WHERE am.request_id=r.id AND am.decision='pending' AND am.approver_username=?)"""
+                         WHERE am.request_id=r.id AND am.decision='pending'
+                           AND am.approver_username=? AND am.step_no IN ({step_placeholders}))"""
             params.append(current_user.username)
+            params.extend(sorted(approval_steps))
         elif status_filter:
             where += " AND r.status=?"
             params.append(status_filter)
@@ -1139,7 +1138,7 @@ def index():
 @login_required
 def export_csv():
     """خروجی اکسل (CSV با UTF-8 BOM) ویژه گزارش‌گیری مدیریتی واحد هوش تجاری سرکان."""
-    if current_user.username == "karid_padra":
+    if not has_iam_permission("requests.export"):
         abort(403)
     conn = data_db()
     try:
@@ -1224,6 +1223,8 @@ def export_csv():
 @app.route("/request/new", methods=["GET", "POST"])
 @login_required
 def new_request():
+    if not has_iam_permission("requests.create"):
+        abort(403)
     if request.method == "POST":
         request_type = request.form.get("request_type", "goods")
         if request_type not in {"goods", "service", "equipment", "other"}:
@@ -1364,21 +1365,26 @@ def view_request(request_id):
     if not data:
         abort(404)
     h = data["header"]
-    if current_user.username == "karid_padra":
-        if h[8] != current_user.username:
-            abort(403)
-    else:
-        is_privileged = current_user.username in {"admin", "ceo_padra", "serkan_purchase_mgr", "padra_expert"}
-        if not is_privileged and h[8] != current_user.username and not any(a[1] == current_user.username for a in data["approvals"]):
-            abort(403)
+    permissions = current_iam_permissions()
+    can_view = (
+        "requests.view_all" in permissions
+        or ("requests.view_own" in permissions and h[8] == current_user.username)
+        or (
+            "requests.view_assigned" in permissions
+            and (
+                h[11] == current_user.username
+                or any(a[1] == current_user.username for a in data["approvals"])
+            )
+        )
+    )
+    if not can_view:
+        abort(403)
     return render_template("request_detail.html", data=data, username=current_user.username)
 
 
 @app.route("/request/<int:request_id>/decision", methods=["POST"])
 @login_required
 def decide_request(request_id):
-    if current_user.username == "karid_padra":
-        abort(403)
     decision = request.form.get("decision", "").strip()
     comment = request.form.get("comment", "").strip()
     selected_specialist = request.form.get("assigned_specialist", "").strip()
@@ -1393,19 +1399,14 @@ def decide_request(request_id):
         conn.autocommit = False
         cur = conn.cursor()
 
-        if current_user.username == "admin":
-            cur.execute(
-                """SELECT TOP (1) id, step_no, approver_username, approver_title FROM Project.approvals
-                   WHERE request_id=? AND decision='pending' ORDER BY step_no""",
-                request_id,
-            )
-        else:
-            cur.execute(
-                """SELECT TOP (1) id, step_no, approver_username, approver_title FROM Project.approvals
-                   WHERE request_id=? AND approver_username=? AND decision='pending'""",
-                request_id,
-                current_user.username,
-            )
+        cur.execute(
+            """SELECT TOP (1) id, step_no, approver_username, approver_title
+               FROM Project.approvals
+               WHERE request_id=? AND approver_username=? AND decision='pending'
+               ORDER BY step_no""",
+            request_id,
+            current_user.username,
+        )
         approval = cur.fetchone()
         if not approval:
             conn.rollback()
@@ -1417,6 +1418,12 @@ def decide_request(request_id):
             approval[2],
             approval[3],
         )
+        if not has_iam_permission(f"requests.approve.step{current_step_no}"):
+            conn.rollback()
+            abort(403)
+        if current_step_no == 2 and not has_iam_permission("requests.assign_specialist"):
+            conn.rollback()
+            abort(403)
 
         specialist_info = None
         if decision == "approved" and current_step_no == 2:
@@ -1570,8 +1577,8 @@ def decide_request(request_id):
 @app.route("/request/<int:request_id>/reassign", methods=["POST"])
 @login_required
 def reassign_specialist(request_id):
-    """امکان تغییر کارشناس خرید توسط مدیر خرید داخلی گروه صنعتی سرکان در مرحله ۳."""
-    if current_user.username == "karid_padra" or current_user.username not in {"serkan_purchase_mgr", "admin"}:
+    """تغییر کارشناس مسئول بر اساس مجوز مرکزی IAM."""
+    if not has_iam_permission("requests.reassign_specialist"):
         abort(403)
     new_specialist = request.form.get("assigned_specialist", "").strip()
     note = request.form.get("reassign_note", "").strip()
