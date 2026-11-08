@@ -93,7 +93,7 @@
       <div class="bi-sp-card">
         <div class="bi-sp-top">
           <div>
-            <b>{{sp.full_name}}</b>
+            {% if sp.full_name != sp.username %}<b>{{sp.full_name}}</b>{% endif %}
             <small>{{sp.role_title}}</small>
           </div>
           <a class="bi-switch-link" href="{{url_for('switch_user', username=sp.username)}}">مشاهده کارتابل ↵</a>
