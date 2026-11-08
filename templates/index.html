@@ -8,14 +8,14 @@
     <p>چرخه یکپارچه ثبت درخواست در شرکت پادرا، تأیید مدیرعامل پادرا، ارجاع به مدیر خرید داخلی گروه صنعتی سرکان و تخصیص هوشمند به کارشناس خرید</p>
   </div>
   <div class="head-actions">
-    {% if username != 'karid_padra' %}
+    {% if has_iam_permission('requests.view_all') %}
     <a class="btn secondary" href="{{url_for('export_csv')}}" title="دانلود فایل اکسل (CSV) کلیه درخواست‌ها جهت تحلیل مدیریتی">⬇ خروجی اکسل گزارش (CSV)</a>
     {% endif %}
     <a class="btn primary" href="{{url_for('new_request')}}">＋ ثبت درخواست خرید جدید (پادرا)</a>
   </div>
 </section>
 
-{% if username != 'karid_padra' %}
+{% if has_iam_permission('requests.view_all') %}
 <section class="workflow-pipeline-card no-print">
   <div class="pipeline-step">
     <div class="p-head-row">
@@ -60,7 +60,7 @@
     <b>{{counts.all}}</b>
     <small>کلیه درخواست‌های ثبت‌شده و ارجاعی</small>
   </a>
-  {% if username != 'karid_padra' %}
+  {% if has_iam_permission('requests.approve.step1') or has_iam_permission('requests.approve.step2') or has_iam_permission('requests.approve.step3') %}
   <a class="stat-card action-needed {% if status_filter=='my_turn' %}selected{% endif %}" href="{{url_for('index',status='my_turn')}}">
     <span>کارتابل اقدام من (نوبت شما)</span>
     <b>{{counts.my_turn}}</b>
@@ -84,7 +84,7 @@
   </a>
 </section>
 
-{% if bi_stats and username != 'karid_padra' %}
+{% if bi_stats and has_iam_permission('requests.view_all') %}
 <section class="panel bi-analytics-panel no-print">
   <div class="bi-panel-head">
     <div>
@@ -118,8 +118,8 @@
 <section class="panel">
   <div class="panel-head">
     <div>
-      <h2>{% if username == 'karid_padra' %}درخواست‌های ثبت‌شده توسط من{% else %}فهرست درخواست‌های خرید شرکت پادرا{% endif %}</h2>
-      <p>{% if username == 'karid_padra' %}در این بخش فقط درخواست‌هایی را می‌بینید که خودتان ثبت کرده‌اید.{% else %}برای بررسی جزئیات، تأیید مرحله، انتخاب کارشناس خرید یا مشاهده تاریخچه روی شماره درخواست کلیک کنید.{% endif %}</p>
+      <h2>{% if has_iam_permission('requests.view_own') and not has_iam_permission('requests.view_all') and not has_iam_permission('requests.view_assigned') %}درخواست‌های ثبت‌شده توسط من{% else %}فهرست درخواست‌های خرید شرکت پادرا{% endif %}</h2>
+      <p>{% if has_iam_permission('requests.view_own') and not has_iam_permission('requests.view_all') and not has_iam_permission('requests.view_assigned') %}در این بخش فقط درخواست‌هایی را می‌بینید که خودتان ثبت کرده‌اید.{% else %}برای بررسی جزئیات، تأیید مرحله، انتخاب کارشناس خرید یا مشاهده تاریخچه روی شماره درخواست کلیک کنید.{% endif %}</p>
     </div>
     <span class="count" id="visible-rows-count">{{rows|length}} مورد</span>
   </div>
@@ -127,7 +127,7 @@
     <input id="quick-search-input" name="q" value="{{search_text}}" placeholder="جستجو بر اساس شماره درخواست، واحد، شرح یا نام ثبت‌کننده...">
     <select name="status" onchange="this.form.submit()">
       <option value="">همه وضعیت‌ها</option>
-      {% if username != 'karid_padra' %}<option value="my_turn" {% if status_filter=='my_turn' %}selected{% endif %}>کارتابل اقدام من (نوبت من)</option>{% endif %}
+      {% if has_iam_permission('requests.approve.step1') or has_iam_permission('requests.approve.step2') or has_iam_permission('requests.approve.step3') %}<option value="my_turn" {% if status_filter=='my_turn' %}selected{% endif %}>کارتابل اقدام من (نوبت من)</option>{% endif %}
       <option value="pending" {% if status_filter=='pending' %}selected{% endif %}>در جریان گردش تأیید و خرید</option>
       <option value="approved" {% if status_filter=='approved' %}selected{% endif %}>سفارش‌گذاری و تکمیل شده</option>
       <option value="rejected" {% if status_filter=='rejected' %}selected{% endif %}>رد شده</option>
