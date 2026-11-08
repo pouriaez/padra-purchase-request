@@ -915,15 +915,18 @@ def unauthorized():
 @app.route("/switch-user/<username>")
 def switch_user(username):
     global _FALLBACK_ACTIVE_USERNAME
-    if username not in ORGANIZATIONAL_USERS:
+    specialist_usernames = {item["username"] for item in get_purchase_specialists()}
+    if username not in ORGANIZATIONAL_USERS and username not in specialist_usernames:
         abort(404)
     user = verify_user_by_username(username)
     if user:
         _FALLBACK_ACTIVE_USERNAME = username
         session.pop("explicit_logout", None)
         login_user(user, remember=False)
-        info = ORGANIZATIONAL_USERS[username]
+        info = user_display_info(username)
         flash(f"کارتابل فعال به «{info['role_title']} ({info['full_name']})» تغییر یافت.", "success")
+    else:
+        flash("حساب کاربری موردنظر در سامانه احراز هویت پیدا نشد.", "error")
     next_url = request.args.get("next") or request.referrer or url_for("index")
     if "/login" in next_url:
         next_url = url_for("index")
