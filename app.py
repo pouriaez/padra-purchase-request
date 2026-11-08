@@ -915,6 +915,9 @@ def unauthorized():
 @app.route("/switch-user/<username>")
 def switch_user(username):
     global _FALLBACK_ACTIVE_USERNAME
+    # Account switching is only a local preview helper; never expose it with SQL authentication.
+    if _has_sqlserver_config(auth=True):
+        abort(403)
     specialist_usernames = {item["username"] for item in get_purchase_specialists()}
     if username not in ORGANIZATIONAL_USERS and username not in specialist_usernames:
         abort(404)
