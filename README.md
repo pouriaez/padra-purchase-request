@@ -14,15 +14,15 @@
 
 ## راه‌اندازی
 1. Python 3.11+ و ODBC Driver 17 یا 18 نصب باشد.
-2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس `bi` اجرا کنید.
-3. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
+2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس `bi` اجرا کنید.\n3. در همان دیتابیس، اسکریپت‌های IAM مخزن `serkan-iam` را به ترتیب `sql/001_create_iam_schema.sql`، `sql/002_seed_padra_purchase_permissions.sql` و `sql/003_padra_rbac_enforcement.sql` اجرا کنید.
+4. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
    `python -m venv .venv`
    `.venv\\Scripts\\activate`
    `pip install -r requirements-windows.txt`
-4. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
-5. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
-6. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).
-7. آدرس برنامه: `http://SERVER:3942`
+5. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
+6. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
+7. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).
+8. آدرس برنامه: `http://SERVER:3942`
 
 ## مجوزهای SQL
 - دیتابیس احراز هویت: دسترسی SELECT به `[Project].[loginusers]`.
@@ -43,3 +43,12 @@ VALUES ('goods', 1, N'username1', N'مدیر واحد', 1),
 - ساختار دقیق کدینگ کالا، واحدهای سازمانی، فهرست تأمین‌کنندگان و امضای دیجیتال هنوز از دیتابیس ERP دریافت نشده است؛ بنابراین ورودی‌های مرتبط فعلاً قابل ورود دستی هستند.
 - امضای تصویری داخل فرم مرجع در نسخه اول به‌صورت جایگاه تأیید و مشخصات تأییدکننده نمایش داده می‌شود؛ امضای دیجیتال واقعی نیازمند سیاست و منبع امضای سازمانی است.
 - برای بهره‌برداری واقعی، حساب‌های SQL را با حداقل دسترسی بسازید و رمزهای دیتابیس را فقط در Environment Variables نگه دارید.
+
+
+## کنترل دسترسی متمرکز IAM
+
+- احراز هویت از جدول سازمانی `Project.loginusers` و خواندن نقش‌ها و مجوزها از جداول `Project.IAM_*` در دیتابیس `bi` انجام می‌شود.
+- برنامه از طریق SQL مستقیم به IAM متصل می‌شود؛ هیچ API یا توکن بین برنامه‌ها وجود ندارد.
+- دسترسی‌های `requests.create`، `requests.view_own`، `requests.view_assigned`، `requests.view_all`، `requests.approve.step1` تا `requests.approve.step3`، `requests.assign_specialist`، `requests.reassign_specialist` و `requests.export` در سمت سرور کنترل می‌شوند.
+- دامنه مشاهده رکوردها نیز با شرط SQL بر اساس مجوزهای `view_own`، `view_assigned` و `view_all` محدود می‌شود.
+- در صورت عدم دسترسی به IAM یا خطا در خواندن مجوزها، برنامه دسترسی را رد می‌کند. تغییر نقش و مجوز در IAM بدون تغییر کد این برنامه اعمال می‌شود.
