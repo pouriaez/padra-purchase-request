@@ -59,27 +59,9 @@
           <input id="login-password" type="password" name="password" value="123456" autocomplete="current-password" required placeholder="رمز عبور">
           <button class="btn primary wide" type="submit">ورود به کارتابل سازمانی <span>←</span></button>
         </form>
-        <div class="quick-login-roles">
-          <small>انتخاب سریع کارتابل (رمز همه: <b>123456</b>):</small>
-          <div class="quick-role-grid">
-            <button type="button" onclick="fillRole('padra_expert')"><span>کارشناس پادرا</span> <span>↵</span></button>
-            <button type="button" onclick="fillRole('ceo_padra')"><span>مدیرعامل پادرا</span> <span>↵</span></button>
-            <button type="button" onclick="fillRole('serkan_purchase_mgr')"><span>مدیر خرید داخلی سرکان</span> <span>↵</span></button>
-            <button type="button" onclick="fillRole('kharid_expert_1')"><span>کارشناس خرید ۱ (رضایی)</span> <span>↵</span></button>
-            <button type="button" onclick="fillRole('kharid_expert_2')"><span>کارشناس خرید ۲ (محمدی)</span> <span>↵</span></button>
-            <button type="button" onclick="fillRole('kharid_expert_3')"><span>کارشناس خرید ۳ (کریمی)</span> <span>↵</span></button>
-          </div>
-        </div>
         <div class="login-foot">طراحی و توسعه داده شده توسط <b>واحد هوش تجاری گروه صنعتی سرکان</b></div>
       </div>
     </section>
   </main>
-  <script>
-    function fillRole(user) {
-      document.getElementById('login-username').value = user;
-      document.getElementById('login-password').value = '123456';
-      document.getElementById('login-form').submit();
-    }
-  </script>
 </body>
 </html>
