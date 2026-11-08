@@ -1592,6 +1592,14 @@ def reassign_specialist(request_id):
         conn.autocommit = False
         cur = conn.cursor()
         cur.execute(
+            """SELECT id FROM Project.approvals
+               WHERE request_id=? AND step_no=3 AND decision='pending'""",
+            request_id,
+        )
+        if not cur.fetchone():
+            conn.rollback()
+            abort(403)
+        cur.execute(
             """UPDATE Project.approvals
                SET approver_username=?, approver_title=?
                WHERE request_id=? AND step_no=3 AND decision='pending'""",
@@ -1612,9 +1620,14 @@ def reassign_specialist(request_id):
         )
         conn.commit()
         flash(f"مسئولیت پیگیری و خرید به «{spec_info['full_name']}» منتقل شد.", "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
     except Exception:
         if conn:
             conn.rollback()
+        app.logger.exception("Specialist reassignment failed")
         flash("تغییر کارشناس خرید انجام نشد.", "error")
     finally:
         if cur:
