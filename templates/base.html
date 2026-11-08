@@ -35,17 +35,19 @@
 
     <nav class="top-nav-links" aria-label="ناوبری اصلی">
       <a href="{{url_for('index')}}" class="top-nav-link {% if request.endpoint == 'index' and not request.args.get('status') %}active{% endif %}">
-        {% if current_user.is_authenticated and current_user.username == 'karid_padra' %}درخواست‌های من{% else %}داشبورد کارتابل{% endif %}
+        {% if has_iam_permission('requests.view_own') and not has_iam_permission('requests.view_all') and not has_iam_permission('requests.view_assigned') %}درخواست‌های من{% else %}داشبورد کارتابل{% endif %}
       </a>
-      {% if not (current_user.is_authenticated and current_user.username == 'karid_padra') %}
+      {% endif %}
+      {% if has_iam_permission('requests.approve.step1') or has_iam_permission('requests.approve.step2') or has_iam_permission('requests.approve.step3') %}
       <a href="{{url_for('index', status='my_turn')}}" class="top-nav-link {% if request.args.get('status') == 'my_turn' %}active{% endif %}">
         نوبت اقدام من
       </a>
       {% endif %}
+      {% if has_iam_permission('requests.create') %}
       <a href="{{url_for('new_request')}}" class="top-nav-link {% if request.endpoint == 'new_request' %}active{% endif %}">
         ثبت درخواست جدید
       </a>
-      {% if not (current_user.is_authenticated and current_user.username == 'karid_padra') %}
+      {% if has_iam_permission('requests.export') %}
       <a href="{{url_for('export_csv')}}" class="top-nav-link">
         خروجی اکسل (CSV)
       </a>
