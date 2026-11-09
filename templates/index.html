@@ -102,7 +102,9 @@
             {% if sp.full_name != sp.username %}<b>{{sp.full_name}}</b>{% endif %}
             <small>{{sp.role_title}}</small>
           </div>
+          {% if has_iam_permission('requests.view_all') %}
           <a class="bi-switch-link" href="{{url_for('switch_user', username=sp.username)}}">مشاهده کارتابل ↵</a>
+          {% endif %}
         </div>
         <div class="bi-sp-metrics">
           <span class="metric-pill active-pill">در دست اقدام: <b>{{wl.active}}</b></span>
