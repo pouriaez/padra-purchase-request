@@ -64,6 +64,16 @@ BEGIN TRY
           WHERE a.request_id = r.id AND a.step_no = 1
       );
 
+    UPDATE Project.approval_routes
+    SET approver_title = N'مسئول گردش اولیه درخواست‌های سرکان'
+    WHERE step_no = 1 AND approver_username = N'admin';
+
+    UPDATE Project.approvals
+    SET approver_title = N'مسئول گردش اولیه درخواست‌های سرکان'
+    WHERE step_no = 1
+      AND approver_username = N'admin'
+      AND decision IN ('pending', 'waiting');
+
     -- Recover previously submitted requests that were saved before approval rows were created.
     INSERT Project.approvals
         (request_id, step_no, approver_username, approver_title, decision)
