@@ -251,7 +251,7 @@
             {% endif %}
           </td>
           <td><b>{{r[13]}}</b> قلم</td>
-          <td>{{r[8].strftime('%Y/%m/%d %H:%M') if r[8] else r[6].strftime('%Y/%m/%d %H:%M')}}</td>
+          <td>{{r[8]|jalali_datetime if r[8] else r[6]|jalali_datetime}}</td>
           <td>
             {% if r[5]=='pending' and r[9]==username %}
               <a class="btn primary small" href="{{url_for('view_request',request_id=r[0])}}">بررسی و اقدام ←</a>
