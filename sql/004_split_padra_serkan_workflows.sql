@@ -35,7 +35,7 @@ BEGIN TRY
     INNER JOIN Project.requests r ON r.id = a.request_id
     WHERE r.requester_username = N'karid_padra'
       AND r.workflow_type = 'padra'
-      AND r.status = 'pending'
+      AND r.status IN ('pending', 'submitted')
       AND a.step_no > 1;
 
     UPDATE a
@@ -48,7 +48,7 @@ BEGIN TRY
     INNER JOIN Project.requests r ON r.id = a.request_id
     WHERE r.requester_username = N'karid_padra'
       AND r.workflow_type = 'padra'
-      AND r.status = 'pending'
+      AND r.status IN ('pending', 'submitted')
       AND a.step_no = 1;
 
     INSERT Project.approvals
@@ -57,7 +57,7 @@ BEGIN TRY
     FROM Project.requests r
     WHERE r.requester_username = N'karid_padra'
       AND r.workflow_type = 'padra'
-      AND r.status = 'pending'
+      AND r.status IN ('pending', 'submitted')
       AND NOT EXISTS (
           SELECT 1
           FROM Project.approvals a
