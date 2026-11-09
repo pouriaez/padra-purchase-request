@@ -396,7 +396,7 @@
           {% if a[1]=='UNASSIGNED_SPECIALIST' %}
             تعیین کارشناس در مرحله ۲ توسط مدیر خرید داخلی
           {% else %}
-            {{user_info(a[1]).full_name}} ({{a[1]}})
+            {{user_info(a[1]).full_name}}
           {% endif %}
         </span>
         <strong>{{{'waiting':'در صف انتظار مرحله قبل','pending':'در دست بررسی و اقدام','approved':'✓ تأیید و انجام شد','rejected':'× رد شد','cancelled':'لغو شد'}.get(a[3],a[3])}}</strong>
