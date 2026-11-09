@@ -133,6 +133,7 @@
       <option value="pending" {% if status_filter=='pending' %}selected{% endif %}>در جریان گردش تأیید و خرید</option>
       <option value="approved" {% if status_filter=='approved' %}selected{% endif %}>سفارش‌گذاری و تکمیل شده</option>
       <option value="rejected" {% if status_filter=='rejected' %}selected{% endif %}>رد شده</option>
+      <option value="cancelled" {% if status_filter=='cancelled' %}selected{% endif %}>لغو شده توسط ثبت‌کننده</option>
     </select>
     <select name="req_type" onchange="this.form.submit()">
       <option value="">همه انواع اقلام</option>
@@ -181,7 +182,7 @@
           <td>{{r[4]}}</td>
           <td>
             <span class="status {{r[5]}}">
-              {% if r[5]=='approved' and r[15]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در جریان گردش','submitted':'بدون مسیر تأیید','approved':'تکمیل و سفارش‌گذاری شد','rejected':'رد شده'}.get(r[5],r[5])}}{% endif %}
+              {% if r[5]=='approved' and r[15]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در جریان گردش','submitted':'بدون مسیر تأیید','approved':'تکمیل و سفارش‌گذاری شد','rejected':'رد شده','cancelled':'لغو شده توسط ثبت‌کننده'}.get(r[5],r[5])}}{% endif %}
             </span>
           </td>
           <td>
