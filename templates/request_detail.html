@@ -35,7 +35,7 @@
             مرحله ۳: محول‌شده به کارشناس خرید سرکان جهت استعلام و سفارش‌گذاری
           {% endif %}
         {% else %}
-          {% if h[9]=='cancelled' %}درخواست توسط کارشناس ثبت خرید پادرا لغو شده است{% elif h[9]=='approved' and h[12]=='padra' %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}{{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}{% endif %}
+          {% if h[9]=='cancelled' %}درخواست توسط کارشناس ثبت خرید پادرا لغو شده است{% elif h[9]=='approved' and h[12]=='padra' %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}{{{'pending':'در حال بررسی و گردش کار','submitted':'ثبت‌شده؛ در انتظار تعریف مسیر تأیید','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'رد شده','cancelled':'لغو شده توسط ثبت‌کننده'}.get(h[9],'وضعیت نامشخص')}}{% endif %}
         {% endif %}
       </h2>
       <span class="request-no">{{h[1]}}</span>
@@ -137,7 +137,7 @@
   </div>
   <form method="post" action="{{url_for('cancel_request',request_id=h[0])}}" class="reassign-form" onsubmit="return confirm('آیا از لغو این درخواست اطمینان دارید؟');">
     <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
-    <input name="cancel_reason" maxlength="500" placeholder="علت لغو (اختیاری)">
+    <input name="cancel_reason" maxlength="500" required placeholder="علت لغو را وارد کنید (الزامی)">
     <button class="btn danger" type="submit">لغو درخواست</button>
   </form>
 </section>
@@ -322,7 +322,7 @@
   <div class="paper-date">
     <span>شماره درخواست: <strong>{{h[1]}}</strong></span>
     <span>تاریخ درخواست: <strong>{{h[2]}}</strong></span>
-    <span>وضعیت پرونده: <strong>{% if h[9]=='approved' and h[12]=='padra' %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}{{{'pending':'در جریان گردش تأیید و خرید','submitted':'بدون مسیر تأیید','approved':'تأیید نهایی و سفارش‌گذاری شد','rejected':'رد شده'}.get(h[9],h[9])}}{% endif %}</strong></span>
+    <span>وضعیت پرونده: <strong>{% if h[9]=='approved' and h[12]=='padra' %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}{{{'pending':'در حال بررسی و گردش کار','submitted':'ثبت‌شده؛ در انتظار تعریف مسیر تأیید','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'رد شده','cancelled':'لغو شده توسط ثبت‌کننده'}.get(h[9],'وضعیت نامشخص')}}{% endif %}</strong></span>
   </div>
 
   <div class="section-caption">۱. مشخصات درخواست خرید</div>
