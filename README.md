@@ -16,6 +16,7 @@
 1. Python 3.11+ و ODBC Driver 17 یا 18 نصب باشد.
 2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس `bi` اجرا کنید.
 3. فایل `sql/002_align_approval_users_with_iam.sql` را اجرا کنید تا ارجاع مرحله اول به `admin` و مرحله دوم به `m.mahdiyon` مطابق تخصیص نقش‌های IAM باشد.
+4. پس از اجرای اسکریپت ایجاد ساختار تأمین‌کنندگان `sql/007_supplier_offers_and_padra_cancellation.sql`، فایل `sql/008_supplier_selection_and_delivery_tracking.sql` را اجرا کنید تا انتخاب تأمین‌کننده و ثبت چندمرحله‌ای رسیدهای تحویل فعال شود.
 4. در همان دیتابیس، اسکریپت‌های IAM مخزن `serkan-iam` را به ترتیب `sql/001_create_iam_schema.sql`، `sql/002_seed_padra_purchase_permissions.sql` و `sql/003_padra_rbac_enforcement.sql` اجرا کنید.
 5. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
    `python -m venv .venv`
