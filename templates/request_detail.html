@@ -41,8 +41,8 @@
       <span class="request-no">{{h[1]}}</span>
     </div>
     <div class="overview-dates">
-      <span>تاریخ ثبت در پادرا <b>{{h[10].strftime('%Y/%m/%d %H:%M') if h[10] else h[2]}}</b></span>
-      <span>آخرین اقدام <b>{{h[11].strftime('%Y/%m/%d %H:%M') if h[11] else '—'}}</b></span>
+      <span>تاریخ ثبت در پادرا <b>{{h[10]|jalali_datetime if h[10] else h[2]}</b></span>
+      <span>آخرین اقدام <b>{{h[11]|jalali_datetime if h[11] else '—'}}</b></span>
     </div>
   </div>
 
@@ -249,11 +249,12 @@
         </div>
         <div class="table-wrap">
           <table class="items-table supplier-offers-table">
-            <thead><tr><th>قلم درخواستی</th><th>نام تأمین‌کننده</th><th>شماره پیش‌فاکتور</th><th>تاریخ تحویل (شمسی)</th><th>تعداد</th><th>فی واحد</th><th>نحوه پرداخت</th><th class="no-print">حذف</th></tr></thead>
+            <thead><tr><th>قلم درخواستی</th><th>نام تأمین‌کننده</th><th>انتخاب نهایی</th><th>شماره پیش‌فاکتور</th><th>تاریخ تحویل (شمسی)</th><th>تعداد</th><th>فی واحد</th><th>نحوه پرداخت</th><th class="no-print">حذف</th></tr></thead>
             <tbody id="supplier-offers-body">
               <tr class="supplier-offer-row">
                 <td><select name="supplier_item_id[]" required>{% for x in data.items %}<option value="{{x[7]}}">{{x[2]}}</option>{% endfor %}</select></td>
                 <td><input name="supplier_name[]" required placeholder="نام تأمین‌کننده"></td>
+                <td><select name="supplier_selected[]" required><option value="0" selected>خیر</option><option value="1">بله، منتخب</option></select></td>
                 <td><input name="proforma_number[]" required placeholder="شماره پیش‌فاکتور"></td>
                 <td><input name="delivery_date[]" required placeholder="۱۴۰۵/۰۹/۱۵"></td>
                 <td><input name="supplier_quantity[]" required type="number" min="0.001" step="0.001" placeholder="تعداد"></td>
@@ -300,6 +301,54 @@
     </form>
   </section>
   {% endif %}
+{% endif %}
+
+{% set can_record_delivery = (h[12]=='padra' and username=='kharid_padra') or (h[13] and username==h[13]) %}
+{% if data.delivery_progress %}
+<section class="panel delivery-monitor-panel no-print">
+  <div class="panel-head">
+    <div><h2>پایش تأمین و تحویل سفارش</h2><p>تأمین‌کننده منتخب، تاریخ وعده تحویل، تعداد سفارش، رسیدهای ثبت‌شده و مانده قابل تحویل</p></div>
+    <span class="count">{{data.delivery_progress|length}} قلم سفارش</span>
+  </div>
+  <div class="table-wrap">
+    <table class="items-table">
+      <thead><tr><th>قلم کالا</th><th>تأمین‌کننده منتخب</th><th>تاریخ وعده</th><th>سفارش</th><th>تحویل‌شده</th><th>مانده</th></tr></thead>
+      <tbody>
+        {% for p in data.delivery_progress %}
+        <tr><td>{{p[2]}}</td><td><b>{{p[1]}}</b></td><td>{{p[3]}}</td><td>{{p[4]}}</td><td>{{p[5]}}</td><td><b>{{[p[4]-p[5],0]|max}}</b></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if can_record_delivery %}
+  <div class="delivery-entry-box">
+    <h3>ثبت رسید تحویل کالا</h3>
+    <p>کارشناس خرید پادرا یا کارشناس خرید منتخب سرکان می‌تواند تحویل کامل یا بخشی از سفارش را ثبت کند.</p>
+    <form method="post" action="{{url_for('record_delivery',request_id=h[0])}}" class="delivery-entry-form">
+      <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+      <label>قلم / تأمین‌کننده منتخب
+        <select name="offer_id" required>
+          {% for p in data.delivery_progress %}
+            {% if p[4]-p[5] > 0 %}<option value="{{p[0]}}">{{p[2]}} — {{p[1]}} (مانده: {{p[4]-p[5]}})</option>{% endif %}
+          {% endfor %}
+        </select>
+      </label>
+      <label>شماره رسید تحویل<input name="receipt_no" required maxlength="100" placeholder="شماره رسید انبار"></label>
+      <label>تاریخ تحویل (شمسی)<input name="delivery_date_fa" required placeholder="۱۴۰۵/۰۹/۱۵"></label>
+      <label>تعداد تحویلی<input name="quantity" required type="number" min="0.001" step="0.001" placeholder="تعداد"></label>
+      <button class="btn primary" type="submit">ثبت رسید تحویل</button>
+    </form>
+  </div>
+  {% endif %}
+  {% if data.delivery_rows %}
+  <h3 class="delivery-history-title">سوابق رسیدهای تحویل</h3>
+  <div class="table-wrap">
+    <table class="items-table"><thead><tr><th>شماره رسید</th><th>تأمین‌کننده</th><th>قلم</th><th>تاریخ</th><th>تعداد</th><th>ثبت‌کننده</th><th>زمان ثبت</th></tr></thead>
+      <tbody>{% for d in data.delivery_rows %}<tr><td>{{d[1]}}</td><td>{{d[6]}}</td><td>{{d[7]}}</td><td>{{d[2]}}</td><td>{{d[3]}}</td><td>{{user_info(d[4]).full_name}}</td><td>{{d[5]|jalali_datetime}}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
 {% endif %}
 
 <section class="paper panel print-paper">
@@ -369,10 +418,10 @@
   {% if data.supplier_offers %}
   <div class="table-wrap">
     <table class="items-table">
-      <thead><tr><th>قلم کالا</th><th>تأمین‌کننده</th><th>شماره پیش‌فاکتور</th><th>تاریخ تحویل</th><th>تعداد</th><th>فی واحد</th><th>نحوه پرداخت</th></tr></thead>
+      <thead><tr><th>قلم کالا</th><th>تأمین‌کننده</th><th>وضعیت انتخاب</th><th>شماره پیش‌فاکتور</th><th>تاریخ وعده تحویل</th><th>تعداد سفارش</th><th>فی واحد</th><th>نحوه پرداخت</th></tr></thead>
       <tbody>
         {% for o in data.supplier_offers %}
-        <tr><td>{{o[3]}}</td><td>{{o[0]}}</td><td>{{o[1]}}</td><td>{{o[2]}}</td><td>{{o[4]}}</td><td>{{o[5]}}</td><td>{{o[6]}}</td></tr>
+        <tr><td>{{o[3]}}</td><td>{{o[0]}}</td><td>{% if o[10] %}<strong>✓ تأمین‌کننده منتخب</strong>{% else %}استعلام / پیشنهاد{% endif %}</td><td>{{o[1]}}</td><td>{{o[2]}}</td><td>{{o[4]}}</td><td>{{o[5]}}</td><td>{{o[6]}}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -381,7 +430,34 @@
   <p class="paper-note">هنوز اطلاعات تأمین‌کننده‌ای ثبت نشده است.</p>
   {% endif %}
 
-  <div class="section-caption">{% if h[12]=='padra' %}۴. تأیید نهایی درخواست خرید پادرا{% else %}۴. مراحل گردش تأیید و محول‌سازی خرید سرکان{% endif %}</div>
+  {% if data.delivery_progress %}
+  <div class="section-caption">۴. پایش تحویل سفارش</div>
+  <div class="table-wrap">
+    <table class="items-table">
+      <thead><tr><th>قلم کالا</th><th>تأمین‌کننده منتخب</th><th>تاریخ وعده تحویل</th><th>تعداد سفارش</th><th>تحویل‌شده</th><th>مانده</th></tr></thead>
+      <tbody>
+        {% for p in data.delivery_progress %}
+        <tr><td>{{p[2]}}</td><td>{{p[1]}}</td><td>{{p[3]}}</td><td>{{p[4]}}</td><td>{{p[5]}}</td><td>{{[p[4]-p[5],0]|max}}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if data.delivery_rows %}
+  <div class="section-caption">۵. رسیدهای ثبت‌شده تحویل</div>
+  <div class="table-wrap">
+    <table class="items-table">
+      <thead><tr><th>شماره رسید</th><th>قلم کالا</th><th>تأمین‌کننده</th><th>تاریخ تحویل</th><th>تعداد</th><th>ثبت‌کننده</th></tr></thead>
+      <tbody>
+        {% for d in data.delivery_rows %}
+        <tr><td>{{d[1]}}</td><td>{{d[7]}}</td><td>{{d[6]}}</td><td>{{d[2]}}</td><td>{{d[3]}}</td><td>{{user_info(d[4]).full_name}}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="section-caption">{% if h[12]=='padra' %}۶. تأیید نهایی درخواست خرید پادرا{% else %}۶. مراحل گردش تأیید و محول‌سازی خرید سرکان{% endif %}</div>
   <div class="approval-grid">
     {% for a in data.approvals %}
       <div class="approval-box {% if a[3]=='approved' %}approval-done{% elif a[3]=='pending' %}approval-current{% elif a[3] in ['rejected','cancelled'] %}approval-rejected{% endif %}">
@@ -400,7 +476,7 @@
           {% endif %}
         </span>
         <strong>{{{'waiting':'در صف انتظار مرحله قبل','pending':'در دست بررسی و اقدام','approved':'✓ تأیید و انجام شد','rejected':'× رد شد','cancelled':'لغو شد'}.get(a[3],a[3])}}</strong>
-        <small>{{a[5].strftime('%Y/%m/%d %H:%M') if a[5] else 'هنوز اقدامی ثبت نشده'}}</small>
+        <small>{{a[5]|jalali_datetime if a[5] else 'هنوز اقدامی ثبت نشده'}}</small>
         {% if a[4] %}<small class="approval-comment">«{{a[4]}}»</small>{% endif %}
       </div>
     {% else %}
@@ -421,7 +497,7 @@
         {% if a[1]=='UNASSIGNED_SPECIALIST' %}منتظر تخصیص کارشناس{% else %}{{user_info(a[1]).full_name}}{% endif %}
       </span>
       <small>
-        {% if a[3]=='approved' %}✓ تأیید سیستمی ({{a[5].strftime('%Y/%m/%d') if a[5] else ''}})
+        {% if a[3]=='approved' %}✓ تأیید سیستمی ({{a[5]|jalali_datetime if a[5] else ''}})
         {% elif a[3]=='rejected' %}× رد شده
         {% else %}در انتظار امضا / تأیید{% endif %}
       </small>
@@ -448,7 +524,7 @@
         <div class="timeline-content">
           <div class="timeline-title">
             <b>{{item[0]}}</b>
-            <time>{{item[3].strftime('%Y/%m/%d · %H:%M') if item[3] else ''}}</time>
+            <time>{{item[3]|jalali_datetime if item[3] else ''}}</time>
           </div>
           <div class="timeline-actor">
             ثبت‌کننده رویداد:
@@ -484,6 +560,7 @@
     addOffer.addEventListener('click', function() {
       var row = offersBody.querySelector('.supplier-offer-row').cloneNode(true);
       row.querySelectorAll('input').forEach(function(input) { input.value = ''; });
+      row.querySelectorAll('select').forEach(function(select) { select.selectedIndex = 0; });
       offersBody.appendChild(row);
     });
     offersBody.addEventListener('click', function(event) {
