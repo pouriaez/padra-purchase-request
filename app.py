@@ -1473,6 +1473,56 @@ def export_csv():
         conn.close()
 
 
+@app.route("/export/deliveries.csv")
+@login_required
+def export_deliveries_csv():
+    permissions = current_iam_permissions()
+    if not any(key in permissions for key in ("requests.view_padra", "requests.view_team", "requests.view_all")):
+        abort(403)
+    visibility, vis_params = request_visibility_clause(permissions)
+    conn = data_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"""SELECT r.request_no,r.unit_name,i.item_description,o.supplier_name,
+                       o.delivery_date_fa,o.quantity,COALESCE(t.delivered_quantity,0),
+                       d.receipt_no,d.delivery_date_fa,d.quantity,d.recorded_by,d.recorded_at
+                FROM Project.requests r
+                INNER JOIN Project.request_supplier_offers o ON o.request_id=r.id AND o.is_selected=1
+                INNER JOIN Project.request_items i ON i.id=o.request_item_id
+                OUTER APPLY (
+                    SELECT SUM(rd.quantity) AS delivered_quantity
+                    FROM Project.request_deliveries rd WHERE rd.offer_id=o.id
+                ) t
+                LEFT JOIN Project.request_deliveries d ON d.offer_id=o.id
+                WHERE {visibility}
+                ORDER BY r.id DESC,i.line_no,d.delivery_date_fa,d.id""",
+            *vis_params,
+        )
+        buf = io.StringIO()
+        buf.write("\\ufeff")
+        writer = csv.writer(buf)
+        writer.writerow([
+            "شماره درخواست", "واحد درخواست‌کننده", "شرح قلم", "تأمین‌کننده منتخب",
+            "موعد تحویل (شمسی)", "تعداد سفارش", "مجموع تحویل‌شده", "شماره رسید",
+            "تاریخ رسید (شمسی)", "تعداد این رسید", "ثبت‌کننده رسید", "زمان ثبت رسید (شمسی)",
+        ])
+        for row in cur.fetchall():
+            writer.writerow([
+                row[0], row[1], row[2], row[3], row[4], row[5], row[6],
+                row[7] or "", row[8] or "", row[9] or "",
+                user_display_info(row[10])["full_name"] if row[10] else "",
+                jalali_datetime(row[11]) if row[11] else "",
+            ])
+        return Response(
+            buf.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=padra_delivery_tracking_report.csv"},
+        )
+    finally:
+        conn.close()
+
+
 @app.route("/api/parts")
 @login_required
 def search_parts():
