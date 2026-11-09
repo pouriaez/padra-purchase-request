@@ -28,7 +28,7 @@
       <h2>
         {% if h[9]=='pending' and ns.current %}
           {% if ns.current[0]==1 %}
-            {% if h[12]=='padra' %}در انتظار تأیید نهایی مدیرعامل پادرا{% else %}مرحله ۱: در انتظار بررسی اولیه گردش کار سرکان{% endif %}
+            {% if h[12]=='padra' %}در انتظار تأیید مدیرعامل پادرا{% else %}مرحله ۱: در انتظار بررسی اولیه گردش کار سرکان{% endif %}
           {% elif ns.current[0]==2 %}
             مرحله ۲: تأییدشده توسط مدیرعامل پادرا · منتظر ارجاع مدیر خرید داخلی سرکان به کارشناس خرید
           {% else %}
@@ -63,7 +63,7 @@
         </div>
         <div class="v-meta">
           <small>
-            {% if a[0]==1 and h[12]=='padra' %}تأیید نهایی مدیرعامل پادرا
+            {% if a[0]==1 and h[12]=='padra' %}تأیید مدیرعامل پادرا
             {% elif a[0]==1 %}مرحله ۱ · بررسی اولیه سرکان
             {% elif a[0]==2 %}مرحله ۲ · مدیریت خرید سرکان
             {% else %}مرحله ۳ · کارشناس خرید سرکان{% endif %}
@@ -294,7 +294,7 @@
   <div class="paper-date">
     <span>شماره درخواست: <strong>{{h[1]}}</strong></span>
     <span>تاریخ درخواست: <strong>{{h[2]}}</strong></span>
-    <span>وضعیت پرونده: <strong>{% if h[9]=='approved' and h[12]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در جریان گردش تأیید و خرید','submitted':'بدون مسیر تأیید','approved':'تأیید نهایی و سفارش‌گذاری شد','rejected':'رد شده'}.get(h[9],h[9])}}{% endif %}</strong></span>
+    <span>وضعیت پرونده: <strong>{% if h[9]=='approved' and h[12]=='padra' %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}{{{'pending':'در جریان گردش تأیید و خرید','submitted':'بدون مسیر تأیید','approved':'تأیید نهایی و سفارش‌گذاری شد','rejected':'رد شده'}.get(h[9],h[9])}}{% endif %}</strong></span>
   </div>
 
   <div class="section-caption">۱. مشخصات درخواست خرید</div>
@@ -342,7 +342,7 @@
     {% for a in data.approvals %}
       <div class="approval-box {% if a[3]=='approved' %}approval-done{% elif a[3]=='pending' %}approval-current{% elif a[3]=='rejected' %}approval-rejected{% endif %}">
         <div class="approval-step">
-          {% if a[0]==1 and h[12]=='padra' %}تأیید نهایی مدیرعامل پادرا
+          {% if a[0]==1 and h[12]=='padra' %}تأیید مدیرعامل پادرا
           {% elif a[0]==1 %}مرحله ۱ · بررسی اولیه
           {% elif a[0]==2 %}مرحله ۲ · ارجاع خرید سرکان
           {% else %}مرحله {{a[0]}} · اجرای سفارش‌گذاری{% endif %}
