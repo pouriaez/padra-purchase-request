@@ -1146,7 +1146,7 @@ def get_request(request_id):
         )
         delivery_rows = cur.fetchall()
         cur.execute(
-            """SELECT o.id,o.supplier_name,i.item_description,o.delivery_date_fa,o.quantity,
+            """SELECT o.id,o.supplier_name,i.item_description,i.unit_name,o.delivery_date_fa,o.quantity,
                       COALESCE(SUM(d.quantity),0) AS delivered_quantity
                FROM Project.request_supplier_offers o
                INNER JOIN Project.request_items i ON i.id=o.request_item_id
@@ -1336,11 +1336,11 @@ def index():
         )
         rows = cur.fetchall()
         delivery_rows = []
-        delivery_summary = {"orders": 0, "ordered": 0.0, "delivered": 0.0, "remaining": 0.0, "late": 0}
+        delivery_summary = {"items": 0, "complete": 0, "pending": 0, "late": 0}
         if any(key in permissions for key in ("requests.view_padra", "requests.view_team", "requests.view_all")):
             cur.execute(
                 f"""SELECT r.id,r.request_no,r.unit_name,r.status,o.supplier_name,o.delivery_date_fa,
-                           i.item_description,o.quantity,COALESCE(d.delivered_quantity,0)
+                           i.item_description,i.unit_name,o.quantity,COALESCE(d.delivered_quantity,0)
                     FROM Project.requests r
                     INNER JOIN Project.request_supplier_offers o ON o.request_id=r.id AND o.is_selected=1
                     INNER JOIN Project.request_items i ON i.id=o.request_item_id
@@ -1354,20 +1354,21 @@ def index():
             )
             today_fa = jalali_today()
             for row in cur.fetchall():
-                ordered_qty = float(row[7] or 0)
-                delivered_qty = float(row[8] or 0)
+                ordered_qty = float(row[8] or 0)
+                delivered_qty = float(row[9] or 0)
                 remaining_qty = max(ordered_qty - delivered_qty, 0)
                 is_late = remaining_qty > 0 and bool(row[5]) and str(row[5]) < today_fa
                 delivery_rows.append({
                     "request_id": row[0], "request_no": row[1], "unit_name": row[2],
                     "status": row[3], "supplier": row[4], "expected_date": row[5],
-                    "item": row[6], "ordered": ordered_qty, "delivered": delivered_qty,
+                    "item": row[6], "unit": row[7], "ordered": ordered_qty, "delivered": delivered_qty,
                     "remaining": remaining_qty, "late": is_late,
                 })
-                delivery_summary["orders"] += 1
-                delivery_summary["ordered"] += ordered_qty
-                delivery_summary["delivered"] += delivered_qty
-                delivery_summary["remaining"] += remaining_qty
+                delivery_summary["items"] += 1
+                if remaining_qty <= 0:
+                    delivery_summary["complete"] += 1
+                else:
+                    delivery_summary["pending"] += 1
                 if is_late:
                     delivery_summary["late"] += 1
         return render_template(
@@ -1484,7 +1485,7 @@ def export_deliveries_csv():
     try:
         cur = conn.cursor()
         cur.execute(
-            f"""SELECT r.request_no,r.unit_name,i.item_description,o.supplier_name,
+            f"""SELECT r.request_no,r.unit_name,i.item_description,i.unit_name,o.supplier_name,
                        o.delivery_date_fa,o.quantity,COALESCE(t.delivered_quantity,0),
                        d.receipt_no,d.delivery_date_fa,d.quantity,d.recorded_by,d.recorded_at
                 FROM Project.requests r
@@ -1504,15 +1505,15 @@ def export_deliveries_csv():
         writer = csv.writer(buf)
         writer.writerow([
             "شماره درخواست", "واحد درخواست‌کننده", "شرح قلم", "تأمین‌کننده منتخب",
-            "موعد تحویل (شمسی)", "تعداد سفارش", "مجموع تحویل‌شده", "شماره رسید",
+            "واحد سنجش", "موعد تحویل (شمسی)", "تعداد سفارش", "مجموع تحویل‌شده", "شماره رسید",
             "تاریخ رسید (شمسی)", "تعداد این رسید", "ثبت‌کننده رسید", "زمان ثبت رسید (شمسی)",
         ])
         for row in cur.fetchall():
             writer.writerow([
-                row[0], row[1], row[2], row[3], row[4], row[5], row[6],
-                row[7] or "", row[8] or "", row[9] or "",
-                user_display_info(row[10])["full_name"] if row[10] else "",
-                jalali_datetime(row[11]) if row[11] else "",
+                row[0], row[1], row[2], row[4], row[3], row[5], row[6], row[7],
+                row[8] or "", row[9] or "", row[10] or "",
+                user_display_info(row[11])["full_name"] if row[11] else "",
+                jalali_datetime(row[12]) if row[12] else "",
             ])
         return Response(
             buf.getvalue(),
