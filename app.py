@@ -1674,7 +1674,13 @@ def reassign_specialist(request_id):
             spec_title,
             request_id,
         )
-        cur.execute("UPDATE Project.requests SET updated_at=GETDATE() WHERE id=?", request_id)
+        cur.execute(
+            """UPDATE Project.requests
+               SET assigned_specialist=?, updated_at=GETDATE()
+               WHERE id=? AND workflow_type='serkan'""",
+            spec_info["username"],
+            request_id,
+        )
         details = f"تغییر کارشناس مسئول خرید توسط مدیر خرید داخلی سرکان به: {spec_info['full_name']} ({spec_info['role_title']})"
         if note:
             details += f" — توضیح: {note}"
