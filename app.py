@@ -396,11 +396,30 @@ def _init_local_sqlite_db():
                 payment_method TEXT NOT NULL,
                 created_by TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                is_selected INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(request_id) REFERENCES requests(id) ON DELETE CASCADE,
                 FOREIGN KEY(request_item_id) REFERENCES request_items(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS request_deliveries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                offer_id INTEGER NOT NULL,
+                receipt_no TEXT NOT NULL,
+                delivery_date_fa TEXT NOT NULL,
+                quantity REAL NOT NULL,
+                recorded_by TEXT NOT NULL,
+                recorded_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                FOREIGN KEY(request_id) REFERENCES requests(id) ON DELETE CASCADE,
+                FOREIGN KEY(offer_id) REFERENCES request_supplier_offers(id) ON DELETE CASCADE
+            );
             """
         )
+
+        cur.execute("PRAGMA table_info(request_supplier_offers)")
+        offer_columns = {row[1] for row in cur.fetchall()}
+        if "is_selected" not in offer_columns:
+            cur.execute("ALTER TABLE request_supplier_offers ADD COLUMN is_selected INTEGER NOT NULL DEFAULT 0")
 
         cur.execute("PRAGMA table_info(requests)")
         request_columns = {row[1] for row in cur.fetchall()}
@@ -1058,6 +1077,22 @@ def jalali_today():
         conn.close()
 
 
+def jalali_datetime(value):
+    if not value:
+        return ""
+    try:
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if isinstance(value, date) and not isinstance(value, datetime):
+            value = datetime.combine(value, datetime.min.time())
+        return jdatetime.datetime.fromgregorian(datetime=value).strftime("%Y/%m/%d · %H:%M")
+    except (TypeError, ValueError):
+        return str(value)
+
+
+app.jinja_env.filters["jalali_datetime"] = jalali_datetime
+
+
 def get_request(request_id):
     conn = data_db()
     try:
@@ -1065,7 +1100,7 @@ def get_request(request_id):
         cur.execute(
             """SELECT id, request_no, request_date_fa, request_type, unit_name, supply_location,
                       fixed_asset, request_reason, requester_username, status, created_at, updated_at,
-                      workflow_type
+                      workflow_type, assigned_specialist
                FROM Project.requests WHERE id=?""",
             request_id,
         )
@@ -1093,13 +1128,35 @@ def get_request(request_id):
         cur.execute(
             """SELECT o.supplier_name,o.proforma_number,o.delivery_date_fa,
                       i.item_description,o.quantity,o.unit_price,o.payment_method,
-                      o.created_by,o.created_at
+                      o.created_by,o.created_at,o.id,o.is_selected,o.request_item_id
                FROM Project.request_supplier_offers o
                INNER JOIN Project.request_items i ON i.id=o.request_item_id
                WHERE o.request_id=? ORDER BY o.id""",
             request_id,
         )
         supplier_offers = cur.fetchall()
+        cur.execute(
+            """SELECT d.id,d.receipt_no,d.delivery_date_fa,d.quantity,d.recorded_by,d.recorded_at,
+                      o.supplier_name,i.item_description,o.id
+               FROM Project.request_deliveries d
+               INNER JOIN Project.request_supplier_offers o ON o.id=d.offer_id
+               INNER JOIN Project.request_items i ON i.id=o.request_item_id
+               WHERE d.request_id=? ORDER BY d.delivery_date_fa,d.id""",
+            request_id,
+        )
+        delivery_rows = cur.fetchall()
+        cur.execute(
+            """SELECT o.id,o.supplier_name,i.item_description,o.delivery_date_fa,o.quantity,
+                      COALESCE(SUM(d.quantity),0) AS delivered_quantity
+               FROM Project.request_supplier_offers o
+               INNER JOIN Project.request_items i ON i.id=o.request_item_id
+               LEFT JOIN Project.request_deliveries d ON d.offer_id=o.id
+               WHERE o.request_id=? AND o.is_selected=1
+               GROUP BY o.id,o.supplier_name,i.item_description,o.delivery_date_fa,o.quantity
+               ORDER BY i.line_no,o.id""",
+            request_id,
+        )
+        delivery_progress = cur.fetchall()
         bi_stats = compute_bi_analytics(cur) if has_iam_permission("requests.assign_specialist") else None
         return {
             "header": header,
@@ -1107,6 +1164,8 @@ def get_request(request_id):
             "approvals": approvals,
             "history": history,
             "supplier_offers": supplier_offers,
+            "delivery_rows": delivery_rows,
+            "delivery_progress": delivery_progress,
             "bi_stats": bi_stats,
         }
     finally:
@@ -1276,12 +1335,49 @@ def index():
             *params,
         )
         rows = cur.fetchall()
+        delivery_rows = []
+        delivery_summary = {"orders": 0, "ordered": 0.0, "delivered": 0.0, "remaining": 0.0, "late": 0}
+        if any(key in permissions for key in ("requests.view_padra", "requests.view_team", "requests.view_all")):
+            cur.execute(
+                f"""SELECT r.id,r.request_no,r.unit_name,r.status,o.supplier_name,o.delivery_date_fa,
+                           i.item_description,o.quantity,COALESCE(d.delivered_quantity,0)
+                    FROM Project.requests r
+                    INNER JOIN Project.request_supplier_offers o ON o.request_id=r.id AND o.is_selected=1
+                    INNER JOIN Project.request_items i ON i.id=o.request_item_id
+                    OUTER APPLY (
+                        SELECT SUM(rd.quantity) AS delivered_quantity
+                        FROM Project.request_deliveries rd WHERE rd.offer_id=o.id
+                    ) d
+                    WHERE {visibility}
+                    ORDER BY r.id DESC,i.line_no""",
+                *vis_params,
+            )
+            today_fa = jalali_today()
+            for row in cur.fetchall():
+                ordered_qty = float(row[7] or 0)
+                delivered_qty = float(row[8] or 0)
+                remaining_qty = max(ordered_qty - delivered_qty, 0)
+                is_late = remaining_qty > 0 and bool(row[5]) and str(row[5]) < today_fa
+                delivery_rows.append({
+                    "request_id": row[0], "request_no": row[1], "unit_name": row[2],
+                    "status": row[3], "supplier": row[4], "expected_date": row[5],
+                    "item": row[6], "ordered": ordered_qty, "delivered": delivered_qty,
+                    "remaining": remaining_qty, "late": is_late,
+                })
+                delivery_summary["orders"] += 1
+                delivery_summary["ordered"] += ordered_qty
+                delivery_summary["delivered"] += delivered_qty
+                delivery_summary["remaining"] += remaining_qty
+                if is_late:
+                    delivery_summary["late"] += 1
         return render_template(
             "index.html",
             rows=rows,
             username=current_user.username,
             counts=counts,
             bi_stats=bi_stats,
+            delivery_rows=delivery_rows,
+            delivery_summary=delivery_summary,
             status_filter=status_filter,
             type_filter=type_filter,
             search_text=search_text,
@@ -1609,6 +1705,7 @@ def view_request(request_id):
             and h[12] in {"serkan", "padra"}
             and any(a[0] == 3 and a[1] == current_user.username for a in data["approvals"])
         )
+        or (h[12] == "padra" and current_user.username == "kharid_padra")
     )
     if not can_view:
         abort(403)
@@ -1622,6 +1719,7 @@ def decide_request(request_id):
     comment = request.form.get("comment", "").strip()
     selected_specialist = request.form.get("assigned_specialist", "").strip()
     supplier_names = request.form.getlist("supplier_name[]")
+    supplier_selected = request.form.getlist("supplier_selected[]")
     proforma_numbers = request.form.getlist("proforma_number[]")
     delivery_dates = request.form.getlist("delivery_date[]")
     supplier_item_ids = request.form.getlist("supplier_item_id[]")
@@ -1685,13 +1783,14 @@ def decide_request(request_id):
             valid_item_ids = {str(row[0]) for row in cur.fetchall()}
             try:
                 row_count = max(
-                    len(supplier_names), len(proforma_numbers), len(delivery_dates),
+                    len(supplier_names), len(supplier_selected), len(proforma_numbers), len(delivery_dates),
                     len(supplier_item_ids), len(supplier_quantities),
                     len(supplier_unit_prices), len(payment_methods)
                 )
                 for idx in range(row_count):
                     values = [
                         supplier_names[idx] if idx < len(supplier_names) else "",
+                        supplier_selected[idx] if idx < len(supplier_selected) else "0",
                         proforma_numbers[idx] if idx < len(proforma_numbers) else "",
                         delivery_dates[idx] if idx < len(delivery_dates) else "",
                         supplier_item_ids[idx] if idx < len(supplier_item_ids) else "",
@@ -1701,7 +1800,7 @@ def decide_request(request_id):
                     ]
                     if not any(str(v).strip() for v in values):
                         continue
-                    supplier, proforma, delivery, item_id, qty_raw, price_raw, payment = [str(v).strip() for v in values]
+                    supplier, selected_raw, proforma, delivery, item_id, qty_raw, price_raw, payment = [str(v).strip() for v in values]
                     if not all([supplier, proforma, delivery, item_id, qty_raw, price_raw, payment]):
                         raise ValueError(f"اطلاعات تأمین‌کننده در ردیف {idx + 1} کامل نیست.")
                     if item_id not in valid_item_ids:
@@ -1711,7 +1810,18 @@ def decide_request(request_id):
                     price = Decimal(normalize_digits(price_raw).replace(",", ""))
                     if qty <= 0 or price <= 0:
                         raise ValueError(f"تعداد و فی واحد در ردیف {idx + 1} باید بیشتر از صفر باشد.")
-                    supplier_rows.append((int(item_id), supplier, proforma, delivery, qty, price, payment))
+                    if selected_raw not in {"0", "1"}:
+                        raise ValueError(f"وضعیت انتخاب تأمین‌کننده در ردیف {idx + 1} معتبر نیست.")
+                    supplier_rows.append((int(item_id), supplier, proforma, delivery, qty, price, payment, selected_raw == "1"))
+                selected_by_item = {}
+                for offer in supplier_rows:
+                    if offer[7]:
+                        if offer[0] in selected_by_item:
+                            raise ValueError("برای هر قلم کالا فقط یک تأمین‌کننده را انتخاب کنید.")
+                        selected_by_item[offer[0]] = True
+                missing_selected = valid_item_ids - set(selected_by_item)
+                if missing_selected:
+                    raise ValueError("برای تمام اقلام درخواست، یک تأمین‌کننده منتخب مشخص کنید.")
             except (InvalidOperation, IndexError, ValueError) as exc:
                 conn.rollback()
                 flash(str(exc) if isinstance(exc, ValueError) else "تعداد یا فی واحد یکی از تأمین‌کنندگان معتبر نیست.", "error")
@@ -1725,8 +1835,8 @@ def decide_request(request_id):
                 cur.execute(
                     """INSERT INTO Project.request_supplier_offers
                        (request_id,request_item_id,supplier_name,proforma_number,delivery_date_fa,
-                        quantity,unit_price,payment_method,created_by)
-                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                        quantity,unit_price,payment_method,is_selected,created_by)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
                     request_id, *offer, current_user.username
                 )
             supplier_summary = "؛ ".join(
@@ -1894,6 +2004,89 @@ def decide_request(request_id):
             conn.rollback()
         app.logger.exception("Approval action failed")
         flash("ثبت تصمیم انجام نشد.", "error")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return redirect(url_for("view_request", request_id=request_id))
+
+
+@app.route("/request/<int:request_id>/delivery", methods=["POST"])
+@login_required
+def record_delivery(request_id):
+    receipt_no = request.form.get("receipt_no", "").strip()
+    delivery_date = request.form.get("delivery_date_fa", "").strip()
+    offer_id_raw = request.form.get("offer_id", "").strip()
+    quantity_raw = request.form.get("quantity", "").strip()
+    if not receipt_no or not offer_id_raw or not delivery_date or not quantity_raw:
+        flash("شماره رسید، تاریخ تحویل، تأمین‌کننده و تعداد الزامی است.", "error")
+        return redirect(url_for("view_request", request_id=request_id))
+    try:
+        offer_id = int(offer_id_raw)
+        delivery_date = validate_jalali_date(delivery_date, "تاریخ تحویل")
+        quantity = Decimal(normalize_digits(quantity_raw).replace(",", ""))
+        if quantity <= 0:
+            raise ValueError("تعداد تحویلی باید بیشتر از صفر باشد.")
+    except (ValueError, InvalidOperation):
+        flash("اطلاعات تحویل معتبر نیست؛ تاریخ را شمسی و تعداد را بزرگ‌تر از صفر وارد کنید.", "error")
+        return redirect(url_for("view_request", request_id=request_id))
+
+    conn = cur = None
+    try:
+        conn = data_db()
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT r.workflow_type,r.assigned_specialist,r.status,o.supplier_name,
+                      o.quantity,COALESCE(SUM(d.quantity),0)
+               FROM Project.requests r
+               INNER JOIN Project.request_supplier_offers o ON o.request_id=r.id AND o.id=?
+               LEFT JOIN Project.request_deliveries d ON d.offer_id=o.id
+               WHERE r.id=? AND o.is_selected=1
+               GROUP BY r.workflow_type,r.assigned_specialist,r.status,o.supplier_name,o.quantity""",
+            offer_id, request_id,
+        )
+        offer = cur.fetchone()
+        if not offer:
+            conn.rollback()
+            abort(404)
+        is_padra_expert = offer[0] == "padra" and current_user.username == "kharid_padra"
+        is_serkan_expert = bool(offer[1]) and current_user.username == offer[1]
+        if not (is_padra_expert or is_serkan_expert):
+            conn.rollback()
+            abort(403)
+        remaining = Decimal(str(offer[4] or 0)) - Decimal(str(offer[5] or 0))
+        if quantity > remaining:
+            conn.rollback()
+            flash(f"تعداد تحویلی از مانده سفارش بیشتر است. مانده قابل ثبت: {remaining}", "error")
+            return redirect(url_for("view_request", request_id=request_id))
+        cur.execute(
+            """INSERT INTO Project.request_deliveries
+               (request_id,offer_id,receipt_no,delivery_date_fa,quantity,recorded_by)
+               VALUES (?,?,?,?,?,?)""",
+            request_id, offer_id, receipt_no, delivery_date, quantity, current_user.username,
+        )
+        details = (
+            f"ثبت رسید تحویل شماره {receipt_no} از تأمین‌کننده «{offer[3]}»؛ "
+            f"تاریخ تحویل {delivery_date}؛ تعداد {quantity}"
+        )
+        cur.execute(
+            """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+               VALUES (?,N'ثبت رسید تحویل کالا',?,?)""",
+            request_id, current_user.username, details,
+        )
+        conn.commit()
+        flash("رسید تحویل با موفقیت ثبت شد و در گزارش مدیریتی قابل مشاهده است.", "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        app.logger.exception("Delivery receipt registration failed")
+        flash("ثبت رسید تحویل انجام نشد؛ ساختار جدول و اتصال دیتابیس را بررسی کنید.", "error")
     finally:
         if cur:
             cur.close()
