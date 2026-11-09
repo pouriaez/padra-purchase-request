@@ -182,7 +182,7 @@
           <td>{{r[4]}}</td>
           <td>
             <span class="status {{r[5]}}">
-              {% if r[5]=='approved' and r[15]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در جریان گردش','submitted':'بدون مسیر تأیید','approved':'تکمیل و سفارش‌گذاری شد','rejected':'رد شده','cancelled':'لغو شده توسط ثبت‌کننده'}.get(r[5],r[5])}}{% endif %}
+              {% if r[5]=='approved' and r[15]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در حال بررسی و گردش کار','submitted':'ثبت‌شده؛ در انتظار تعریف مسیر تأیید','approved':'تکمیل و سفارش‌گذاری شد','rejected':'رد شده','cancelled':'لغو شده توسط ثبت‌کننده'}.get(r[5],'وضعیت نامشخص')}}{% endif %}
             </span>
           </td>
           <td>
@@ -207,7 +207,7 @@
             {% elif r[5]=='approved' %}
               <span class="done-cell">✓ سفارش‌گذاری و خرید تکمیل شد</span>
             {% else %}
-              <span class="muted-cell">گردش کار متوقف شده (رد شده)</span>
+              {% if r[5]=='cancelled' %}<span class="muted-cell">درخواست توسط ثبت‌کننده لغو شده است</span>{% elif r[5]=='rejected' %}<span class="muted-cell">درخواست در مرحله بررسی رد شده است</span>{% else %}<span class="muted-cell">وضعیت: {{r[5]}}</span>{% endif %}
             {% endif %}
           </td>
           <td><b>{{r[13]}}</b> قلم</td>
