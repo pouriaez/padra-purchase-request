@@ -73,9 +73,9 @@
     <small>در مراحل ۱ تا ۳ چرخه پادرا - سرکان</small>
   </a>
   <a class="stat-card success {% if status_filter=='approved' %}selected{% endif %}" href="{{url_for('index',status='approved')}}">
-    <span>سفارش‌گذاری و تکمیل شده</span>
+    <span>{% if has_iam_permission('requests.view_padra') %}تأیید نهایی مدیرعامل پادرا{% else %}سفارش‌گذاری و تکمیل شده{% endif %}</span>
     <b>{{counts.approved}}</b>
-    <small>تأیید نهایی و خرید انجام‌شده</small>
+    <small>{% if has_iam_permission('requests.view_padra') %}درخواست‌های تأییدشده پادرا{% else %}تأیید نهایی و خرید انجام‌شده{% endif %}</small>
   </a>
   <a class="stat-card rejected {% if status_filter=='rejected' %}selected{% endif %}" href="{{url_for('index',status='rejected')}}">
     <span>رد شده</span>
@@ -179,7 +179,7 @@
           <td>{{r[4]}}</td>
           <td>
             <span class="status {{r[5]}}">
-              {{{'pending':'در جریان گردش','submitted':'بدون مسیر تأیید','approved':'تکمیل و سفارش‌گذاری شد','rejected':'رد شده'}.get(r[5],r[5])}}
+              {% if r[5]=='approved' and r[15]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در جریان گردش','submitted':'بدون مسیر تأیید','approved':'تکمیل و سفارش‌گذاری شد','rejected':'رد شده'}.get(r[5],r[5])}}{% endif %}
             </span>
           </td>
           <td>
