@@ -847,7 +847,7 @@ def request_visibility_clause(permissions):
         clauses.append("r.workflow_type = 'padra'")
     if "requests.view_team" in permissions:
         clauses.append(
-            """(r.workflow_type = 'serkan' AND EXISTS (
+            """(r.workflow_type IN ('serkan','padra') AND EXISTS (
                 SELECT 1 FROM Project.approvals ax
                 WHERE ax.request_id = r.id
                   AND (
@@ -862,7 +862,7 @@ def request_visibility_clause(permissions):
         params.append(current_user.username)
     if "requests.view_assigned" in permissions:
         clauses.append(
-            """(r.workflow_type = 'serkan' AND EXISTS (
+            """(r.workflow_type IN ('serkan','padra') AND EXISTS (
                 SELECT 1 FROM Project.approvals ax
                 WHERE ax.request_id = r.id
                   AND ax.step_no = 3
@@ -1424,7 +1424,7 @@ def view_request(request_id):
         )
         or (
             "requests.view_team" in permissions
-            and h[12] == "serkan"
+            and h[12] in {"serkan", "padra"}
             and any(
                 (a[0] == 2 and a[1] == current_user.username)
                 or (a[0] == 3 and a[1] != "UNASSIGNED_SPECIALIST")
@@ -1433,7 +1433,7 @@ def view_request(request_id):
         )
         or (
             "requests.view_assigned" in permissions
-            and h[12] == "serkan"
+            and h[12] in {"serkan", "padra"}
             and any(a[0] == 3 and a[1] == current_user.username for a in data["approvals"])
         )
     )
