@@ -41,7 +41,7 @@
       <span class="request-no">{{h[1]}}</span>
     </div>
     <div class="overview-dates">
-      <span>تاریخ ثبت در پادرا <b>{{h[10]|jalali_datetime if h[10] else h[2]}</b></span>
+      <span>تاریخ ثبت در پادرا <b>{{h[10]|jalali_datetime if h[10] else h[2]}}</b></span>
       <span>آخرین اقدام <b>{{h[11]|jalali_datetime if h[11] else '—'}}</b></span>
     </div>
   </div>
@@ -320,7 +320,11 @@
       </tbody>
     </table>
   </div>
-  {% if can_record_delivery %}
+  {% set delivery_state = namespace(has_remaining=false) %}
+  {% for p in data.delivery_progress %}
+    {% if p[4]-p[5] > 0 %}{% set delivery_state.has_remaining = true %}{% endif %}
+  {% endfor %}
+  {% if can_record_delivery and delivery_state.has_remaining %}
   <div class="delivery-entry-box">
     <h3>ثبت رسید تحویل کالا</h3>
     <p>کارشناس خرید پادرا یا کارشناس خرید منتخب سرکان می‌تواند تحویل کامل یا بخشی از سفارش را ثبت کند.</p>
