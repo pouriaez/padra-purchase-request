@@ -1500,7 +1500,7 @@ def export_deliveries_csv():
             *vis_params,
         )
         buf = io.StringIO()
-        buf.write("\\ufeff")
+        buf.write("\ufeff")
         writer = csv.writer(buf)
         writer.writerow([
             "شماره درخواست", "واحد درخواست‌کننده", "شرح قلم", "تأمین‌کننده منتخب",
