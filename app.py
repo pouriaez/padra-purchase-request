@@ -833,14 +833,28 @@ def request_visibility_clause(permissions):
     params = []
     if "requests.view_all" in permissions:
         return "1=1", []
+    if "requests.view_padra" in permissions:
+        clauses.append("r.workflow_type = 'padra'")
+    if "requests.view_team" in permissions:
+        clauses.append(
+            """(r.workflow_type = 'serkan' AND EXISTS (
+                SELECT 1 FROM Project.approvals ax
+                WHERE ax.request_id = r.id AND ax.step_no IN (2, 3)
+            ))"""
+        )
     if "requests.view_own" in permissions:
-        clauses.append("r.requester_username = ?")
+        clauses.append("(r.workflow_type = 'padra' AND r.requester_username = ?)")
         params.append(current_user.username)
     if "requests.view_assigned" in permissions:
         clauses.append(
-            """(r.assigned_specialist = ? OR EXISTS
-               (SELECT 1 FROM Project.approvals ax
-                WHERE ax.request_id = r.id AND ax.approver_username = ?))"""
+            """(r.workflow_type = 'serkan' AND (
+                r.assigned_specialist = ? OR EXISTS (
+                    SELECT 1 FROM Project.approvals ax
+                    WHERE ax.request_id = r.id
+                      AND ax.step_no = 3
+                      AND ax.approver_username = ?
+                )
+            ))"""
         )
         params.extend([current_user.username, current_user.username])
     if not clauses:
@@ -924,7 +938,8 @@ def get_request(request_id):
         cur = conn.cursor()
         cur.execute(
             """SELECT id, request_no, request_date_fa, request_type, unit_name, supply_location,
-                      fixed_asset, request_reason, requester_username, status, created_at, updated_at
+                      fixed_asset, request_reason, requester_username, status, created_at, updated_at,
+                      workflow_type
                FROM Project.requests WHERE id=?""",
             request_id,
         )
@@ -949,7 +964,7 @@ def get_request(request_id):
             request_id,
         )
         history = cur.fetchall()
-        bi_stats = compute_bi_analytics(cur) if has_iam_permission("requests.view_all") else None
+        bi_stats = compute_bi_analytics(cur) if has_iam_permission("requests.assign_specialist") else None
         return {
             "header": header,
             "items": items,
@@ -1037,6 +1052,8 @@ def index():
             step for step in (1, 2, 3)
             if f"requests.approve.step{step}" in permissions
         }
+        if "requests.approve.padra" in permissions:
+            approval_steps.add(1)
 
         cur.execute(
             f"""SELECT r.status,COUNT(*) FROM Project.requests r
@@ -1063,7 +1080,7 @@ def index():
             counts["my_turn"] = cur.fetchone()[0] or 0
         else:
             counts["my_turn"] = 0
-        bi_stats = compute_bi_analytics(cur) if "requests.view_all" in permissions else None
+        bi_stats = compute_bi_analytics(cur) if "requests.assign_specialist" in permissions else None
 
         where = visibility
         params = list(vis_params)
@@ -1226,6 +1243,7 @@ def export_csv():
 def new_request():
     if not has_iam_permission("requests.create"):
         abort(403)
+    workflow_type = "padra" if has_iam_permission("requests.workflow.padra") else "serkan"
     if request.method == "POST":
         request_type = request.form.get("request_type", "goods")
         if request_type not in {"goods", "service", "equipment", "other"}:
@@ -1289,8 +1307,8 @@ def new_request():
             cur.execute(
                 """INSERT INTO Project.requests
                    (request_date,request_date_fa,request_type,unit_name,supply_location,fixed_asset,
-                    request_reason,requester_username,status)
-                   OUTPUT INSERTED.id VALUES (?,?,?,?,?,?,?,?,'pending')""",
+                    request_reason,requester_username,workflow_type,status)
+                   OUTPUT INSERTED.id VALUES (?,?,?,?,?,?,?,?,?,'pending')""",
                 now.date(),
                 jalali,
                 request_type,
@@ -1299,6 +1317,7 @@ def new_request():
                 fixed_asset,
                 reason or None,
                 current_user.username,
+                workflow_type,
             )
             request_id = cur.fetchone()[0]
             request_no = f"PR-{jalali.replace('/', '')}-{request_id:06d}"
@@ -1311,13 +1330,21 @@ def new_request():
                     request_id,
                     *item,
                 )
-            cur.execute(
-                """INSERT INTO Project.approvals(request_id,step_no,approver_username,approver_title,decision)
-                   SELECT ?,step_no,approver_username,approver_title,'waiting'
-                   FROM Project.approval_routes WHERE request_type=? AND is_active=1""",
-                request_id,
-                request_type,
-            )
+            if workflow_type == "padra":
+                cur.execute(
+                    """INSERT INTO Project.approvals
+                       (request_id,step_no,approver_username,approver_title,decision)
+                       VALUES (?,1,N'i.heydari',N'مدیرعامل شرکت پادرا','waiting')""",
+                    request_id,
+                )
+            else:
+                cur.execute(
+                    """INSERT INTO Project.approvals(request_id,step_no,approver_username,approver_title,decision)
+                       SELECT ?,step_no,approver_username,approver_title,'waiting'
+                       FROM Project.approval_routes WHERE request_type=? AND is_active=1""",
+                    request_id,
+                    request_type,
+                )
             cur.execute(
                 """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
                    VALUES (?,N'ثبت درخواست در شرکت پادرا',?,?)""",
@@ -1369,10 +1396,21 @@ def view_request(request_id):
     permissions = current_iam_permissions()
     can_view = (
         "requests.view_all" in permissions
-        or ("requests.view_own" in permissions and h[8] == current_user.username)
+        or ("requests.view_padra" in permissions and h[12] == "padra")
+        or (
+            "requests.view_own" in permissions
+            and h[12] == "padra"
+            and h[8] == current_user.username
+        )
+        or (
+            "requests.view_team" in permissions
+            and h[12] == "serkan"
+            and any(a[0] in (2, 3) for a in data["approvals"])
+        )
         or (
             "requests.view_assigned" in permissions
-            and any(a[1] == current_user.username for a in data["approvals"])
+            and h[12] == "serkan"
+            and any(a[0] == 3 and a[1] == current_user.username for a in data["approvals"])
         )
     )
     if not can_view:
@@ -1398,10 +1436,11 @@ def decide_request(request_id):
         cur = conn.cursor()
 
         cur.execute(
-            """SELECT TOP (1) id, step_no, approver_username, approver_title
-               FROM Project.approvals
-               WHERE request_id=? AND approver_username=? AND decision='pending'
-               ORDER BY step_no""",
+            """SELECT TOP (1) a.id, a.step_no, a.approver_username, a.approver_title, r.workflow_type
+               FROM Project.approvals a
+               INNER JOIN Project.requests r ON r.id = a.request_id
+               WHERE a.request_id=? AND a.approver_username=? AND a.decision='pending'
+               ORDER BY a.step_no""",
             request_id,
             current_user.username,
         )
@@ -1410,13 +1449,18 @@ def decide_request(request_id):
             conn.rollback()
             abort(403)
 
-        approval_id, current_step_no, step_approver_user, step_approver_title = (
+        approval_id, current_step_no, step_approver_user, step_approver_title, workflow_type = (
             approval[0],
             approval[1],
             approval[2],
             approval[3],
+            approval[4],
         )
-        if not has_iam_permission(f"requests.approve.step{current_step_no}"):
+        if workflow_type == "padra":
+            if current_step_no != 1 or not has_iam_permission("requests.approve.padra"):
+                conn.rollback()
+                abort(403)
+        elif not has_iam_permission(f"requests.approve.step{current_step_no}"):
             conn.rollback()
             abort(403)
         if current_step_no == 2 and not has_iam_permission("requests.assign_specialist"):
@@ -1497,26 +1541,35 @@ def decide_request(request_id):
             details = f"تأیید مرحله ۱ توسط {step_approver_title}"
             if full_comment:
                 details += f" — توضیح: {full_comment}"
-            cur.execute(
-                """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-                   VALUES (?,N'تأیید مدیرعامل شرکت پادرا',?,?)""",
-                request_id,
-                current_user.username,
-                details,
-            )
-            if next_approval:
-                cur.execute(
-                    """SELECT step_no,approver_username,approver_title
-                       FROM Project.approvals WHERE id=?""",
-                    next_approval[0],
-                )
-                next_step = cur.fetchone()
+            if workflow_type == "padra":
                 cur.execute(
                     """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-                       VALUES (?,N'محول‌سازی به مدیر خرید داخلی سرکان',N'SYSTEM',?)""",
+                       VALUES (?,N'تأیید نهایی مدیرعامل پادرا',?,?)""",
                     request_id,
-                    f"درخواست پس از تأیید مدیرعامل پادرا به مرحله {next_step[0]} ({next_step[2]} - {next_step[1]}) محول شد تا کارشناس خرید تعیین گردد.",
+                    current_user.username,
+                    details,
                 )
+            else:
+                cur.execute(
+                    """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+                       VALUES (?,N'تأیید مدیرعامل شرکت پادرا',?,?)""",
+                    request_id,
+                    current_user.username,
+                    details,
+                )
+                if next_approval:
+                    cur.execute(
+                        """SELECT step_no,approver_username,approver_title
+                           FROM Project.approvals WHERE id=?""",
+                        next_approval[0],
+                    )
+                    next_step = cur.fetchone()
+                    cur.execute(
+                        """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+                           VALUES (?,N'محول‌سازی به مدیر خرید داخلی سرکان',N'SYSTEM',?)""",
+                        request_id,
+                        f"درخواست پس از تأیید مدیرعامل پادرا به مرحله {next_step[0]} ({next_step[2]} - {next_step[1]}) محول شد تا کارشناس خرید تعیین گردد.",
+                    )
         elif current_step_no == 2 and specialist_info:
             details = (
                 f"تأیید توسط مدیر خرید داخلی گروه صنعتی سرکان و محول‌سازی به "
@@ -1549,7 +1602,9 @@ def decide_request(request_id):
             )
 
         conn.commit()
-        if decision == "approved" and current_step_no == 1:
+        if decision == "approved" and workflow_type == "padra":
+            flash("تأیید نهایی مدیرعامل پادرا ثبت شد؛ گردش کار این درخواست در همین مرحله به پایان رسید.", "success")
+        elif decision == "approved" and current_step_no == 1:
             flash("تأیید مدیرعامل شرکت پادرا ثبت شد و درخواست به کارتابل مدیر خرید داخلی گروه صنعتی سرکان محول گردید.", "success")
         elif decision == "approved" and current_step_no == 2 and specialist_info:
             flash(f"درخواست با موفقیت تأیید و به کارتابل «{specialist_info['full_name']} ({specialist_info['role_title']})» محول شد.", "success")
