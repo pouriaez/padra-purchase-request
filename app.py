@@ -1152,7 +1152,7 @@ def get_request(request_id):
                INNER JOIN Project.request_items i ON i.id=o.request_item_id
                LEFT JOIN Project.request_deliveries d ON d.offer_id=o.id
                WHERE o.request_id=? AND o.is_selected=1
-               GROUP BY o.id,o.supplier_name,i.item_description,o.delivery_date_fa,o.quantity
+               GROUP BY o.id,o.supplier_name,i.item_description,i.unit_name,o.delivery_date_fa,o.quantity
                ORDER BY i.line_no,o.id""",
             request_id,
         )
