@@ -1864,15 +1864,6 @@ def decide_request(request_id):
                     if selected_raw not in {"0", "1"}:
                         raise ValueError(f"وضعیت انتخاب تأمین‌کننده در ردیف {idx + 1} معتبر نیست.")
                     supplier_rows.append((int(item_id), supplier, proforma, delivery, qty, price, payment, selected_raw == "1"))
-                selected_by_item = {}
-                for offer in supplier_rows:
-                    if offer[7]:
-                        if offer[0] in selected_by_item:
-                            raise ValueError("برای هر قلم کالا فقط یک تأمین‌کننده را انتخاب کنید.")
-                        selected_by_item[offer[0]] = True
-                missing_selected = {int(item_id) for item_id in valid_item_ids} - set(selected_by_item)
-                if missing_selected:
-                    raise ValueError("برای تمام اقلام درخواست، یک تأمین‌کننده منتخب مشخص کنید.")
             except (InvalidOperation, IndexError, ValueError) as exc:
                 conn.rollback()
                 flash(str(exc) if isinstance(exc, ValueError) else "تعداد یا فی واحد یکی از تأمین‌کنندگان معتبر نیست.", "error")
@@ -2107,11 +2098,6 @@ def record_delivery(request_id):
         if not (is_padra_expert or is_serkan_expert):
             conn.rollback()
             abort(403)
-        remaining = Decimal(str(offer[4] or 0)) - Decimal(str(offer[5] or 0))
-        if quantity > remaining:
-            conn.rollback()
-            flash(f"تعداد تحویلی از مانده سفارش بیشتر است. مانده قابل ثبت: {remaining}", "error")
-            return redirect(url_for("view_request", request_id=request_id))
         cur.execute(
             """INSERT INTO Project.request_deliveries
                (request_id,offer_id,receipt_no,delivery_date_fa,quantity,recorded_by)
