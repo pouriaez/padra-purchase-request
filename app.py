@@ -1819,7 +1819,7 @@ def decide_request(request_id):
                         if offer[0] in selected_by_item:
                             raise ValueError("برای هر قلم کالا فقط یک تأمین‌کننده را انتخاب کنید.")
                         selected_by_item[offer[0]] = True
-                missing_selected = valid_item_ids - set(selected_by_item)
+                missing_selected = {int(item_id) for item_id in valid_item_ids} - set(selected_by_item)
                 if missing_selected:
                     raise ValueError("برای تمام اقلام درخواست، یک تأمین‌کننده منتخب مشخص کنید.")
             except (InvalidOperation, IndexError, ValueError) as exc:
