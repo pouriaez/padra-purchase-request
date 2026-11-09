@@ -166,10 +166,10 @@
       <form method="post" action="{{url_for('decide_request',request_id=h[0])}}">
         <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
         <div class="field">
-          <label>{% if h[12]=='padra' %}هامش مدیرعامل شرکت پادرا (اختیاری){% else %}یادداشت بررسی اولیه سرکان (اختیاری){% endif %}</label>
+          <label>{% if h[12]=='padra' %}توضیحات مدیرعامل شرکت پادرا (اختیاری){% else %}یادداشت بررسی اولیه سرکان (اختیاری){% endif %}</label>
           <textarea id="decision-comment" name="comment" rows="2" maxlength="1000" placeholder="{% if h[12]=='padra' %}توضیحات تصمیم نهایی مدیرعامل پادرا (اختیاری)...{% else %}توضیحات مرحله بررسی (اختیاری)...{% endif %}"></textarea>
           <div class="quick-chips-row">
-            <span class="quick-chips-label">درج سریع هامش:</span>
+            <span class="quick-chips-label">درج سریع توضیحات:</span>
             {% if h[12]=='padra' %}
             <button type="button" class="quick-chip" onclick="setDecisionComment('با توجه به ضرورت اعلام‌شده، مورد تأیید نهایی است.')">تأیید نهایی</button>
             <button type="button" class="quick-chip" onclick="setDecisionComment('با توجه به اولویت و ضرورت اعلام‌شده، درخواست مورد تأیید است.')">تأیید با اولویت</button>
