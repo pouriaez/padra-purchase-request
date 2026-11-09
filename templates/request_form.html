@@ -266,7 +266,14 @@ body.addEventListener('input', event => {
 });
 
 document.addEventListener('focusin', event => {
+  if (event.target.closest('.part-search-results')) return;
   if (!event.target.matches('.part-code-input, .part-name-input')) closePartMenus();
+});
+
+// Keep focus on the search input while clicking a result. Without this,
+// focusin fires on the result button first and hides the menu before click.
+document.addEventListener('mousedown', event => {
+  if (event.target.closest('.part-search-option')) event.preventDefault();
 });
 document.addEventListener('click', event => {
   if (!event.target.closest('.part-search-results') &&
