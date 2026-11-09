@@ -57,9 +57,9 @@
       </div>
     </div>
     {% for a in data.approvals %}
-      <div class="v-step {% if a[3]=='approved' %}done{% elif a[3]=='pending' %}current{% elif a[3]=='rejected' %}rejected{% else %}waiting{% endif %}">
+      <div class="v-step {% if a[3]=='approved' %}done{% elif a[3]=='pending' %}current{% elif a[3] in ['rejected','cancelled'] %}rejected{% else %}waiting{% endif %}">
         <div class="v-circle">
-          {% if a[3]=='approved' %}✓{% elif a[3]=='rejected' %}×{% else %}{{a[0]}}{% endif %}
+          {% if a[3]=='approved' %}✓{% elif a[3] in ['rejected','cancelled'] %}×{% else %}{{a[0]}}{% endif %}
         </div>
         <div class="v-meta">
           <small>
@@ -384,7 +384,7 @@
   <div class="section-caption">{% if h[12]=='padra' %}۴. تأیید نهایی درخواست خرید پادرا{% else %}۴. مراحل گردش تأیید و محول‌سازی خرید سرکان{% endif %}</div>
   <div class="approval-grid">
     {% for a in data.approvals %}
-      <div class="approval-box {% if a[3]=='approved' %}approval-done{% elif a[3]=='pending' %}approval-current{% elif a[3]=='rejected' %}approval-rejected{% endif %}">
+      <div class="approval-box {% if a[3]=='approved' %}approval-done{% elif a[3]=='pending' %}approval-current{% elif a[3] in ['rejected','cancelled'] %}approval-rejected{% endif %}">
         <div class="approval-step">
           {% if a[0]==1 and h[12]=='padra' %}تأیید مدیرعامل پادرا
           {% elif a[0]==1 %}مرحله ۱ · بررسی اولیه
@@ -399,7 +399,7 @@
             {{user_info(a[1]).full_name}} ({{a[1]}})
           {% endif %}
         </span>
-        <strong>{{{'waiting':'در صف انتظار مرحله قبل','pending':'در دست بررسی و اقدام','approved':'✓ تأیید و انجام شد','rejected':'× رد شد'}.get(a[3],a[3])}}</strong>
+        <strong>{{{'waiting':'در صف انتظار مرحله قبل','pending':'در دست بررسی و اقدام','approved':'✓ تأیید و انجام شد','rejected':'× رد شد','cancelled':'لغو شد'}.get(a[3],a[3])}}</strong>
         <small>{{a[5].strftime('%Y/%m/%d %H:%M') if a[5] else 'هنوز اقدامی ثبت نشده'}}</small>
         {% if a[4] %}<small class="approval-comment">«{{a[4]}}»</small>{% endif %}
       </div>
