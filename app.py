@@ -1379,8 +1379,10 @@ def new_request():
             conn.commit()
             if workflow_type == "padra":
                 flash(f"درخواست خرید {request_no} با موفقیت ثبت و فقط برای تأیید نهایی به کارتابل مدیرعامل پادرا ارسال شد.", "success")
-            else:
+            elif first_approval:
                 flash(f"درخواست خرید {request_no} با موفقیت ثبت و به کارتابل مسئول مرحله اول ({first_approval[3]} - {first_approval[2]}) ارسال شد.", "success")
+            else:
+                flash(f"درخواست خرید {request_no} ثبت شد، اما برای این نوع درخواست مسیر تأیید فعالی تعریف نشده است.", "warning")
             return redirect(url_for("view_request", request_id=request_id))
         except Exception:
             if conn:
