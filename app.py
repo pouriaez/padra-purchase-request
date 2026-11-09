@@ -1337,6 +1337,7 @@ def index():
         rows = cur.fetchall()
         delivery_rows = []
         delivery_summary = {"items": 0, "complete": 0, "pending": 0, "late": 0}
+        request_delivery_status = {}
         if any(key in permissions for key in ("requests.view_padra", "requests.view_team", "requests.view_all")):
             cur.execute(
                 f"""SELECT r.id,r.request_no,r.unit_name,r.status,o.supplier_name,o.delivery_date_fa,
@@ -1371,6 +1372,18 @@ def index():
                     delivery_summary["pending"] += 1
                 if is_late:
                     delivery_summary["late"] += 1
+            request_totals = {}
+            for item in delivery_rows:
+                totals = request_totals.setdefault(item["request_id"], {"ordered": 0.0, "delivered": 0.0})
+                totals["ordered"] += item["ordered"]
+                totals["delivered"] += item["delivered"]
+            for req_id, totals in request_totals.items():
+                if totals["delivered"] >= totals["ordered"]:
+                    request_delivery_status[req_id] = "تحویل شده"
+                elif totals["delivered"] > 0:
+                    request_delivery_status[req_id] = "در حال تحویل"
+                else:
+                    request_delivery_status[req_id] = "سفارش‌گذاری شده"
         return render_template(
             "index.html",
             rows=rows,
@@ -1379,6 +1392,7 @@ def index():
             bi_stats=bi_stats,
             delivery_rows=delivery_rows,
             delivery_summary=delivery_summary,
+            request_delivery_status=request_delivery_status,
             status_filter=status_filter,
             type_filter=type_filter,
             search_text=search_text,
