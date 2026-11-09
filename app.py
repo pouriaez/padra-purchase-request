@@ -729,8 +729,9 @@ def compute_bi_analytics(cur) -> dict:
         """SELECT a.step_no, COUNT(DISTINCT a.request_id)
            FROM Project.approvals a
            INNER JOIN Project.requests r ON r.id = a.request_id
-           WHERE r.workflow_type = 'serkan'
+           WHERE r.workflow_type IN ('serkan','padra')
              AND r.status = 'pending' AND a.decision = 'pending'
+             AND a.step_no IN (2,3)
            GROUP BY a.step_no"""
     )
     stage_Waiting = {1: 0, 2: 0, 3: 0}
@@ -746,7 +747,7 @@ def compute_bi_analytics(cur) -> dict:
                  SUM(CASE WHEN a.decision = 'approved' THEN 1 ELSE 0 END)
                FROM Project.approvals a
                INNER JOIN Project.requests r ON r.id = a.request_id
-               WHERE r.workflow_type = 'serkan'
+               WHERE r.workflow_type IN ('serkan','padra')
                  AND a.approver_username = ?""",
             uname,
         )
@@ -1479,11 +1480,11 @@ def decide_request(request_id):
             approval[3],
             approval[4],
         )
-        if workflow_type == "padra":
-            if current_step_no != 1 or not has_iam_permission("requests.approve.padra"):
+        if workflow_type == "padra" and current_step_no == 1:
+            if not has_iam_permission("requests.approve.padra"):
                 conn.rollback()
                 abort(403)
-        elif not has_iam_permission(f"requests.approve.step{current_step_no}"):
+        elif not has_iam_permission(f"requests.approve.step{current_step_no}"): 
             conn.rollback()
             abort(403)
         if current_step_no == 2 and not has_iam_permission("requests.assign_specialist"):
@@ -1514,6 +1515,19 @@ def decide_request(request_id):
         if decision == "rejected":
             status = "rejected"
         else:
+            if workflow_type == "padra" and current_step_no == 1:
+                cur.execute(
+                    """INSERT INTO Project.approvals
+                       (request_id,step_no,approver_username,approver_title,decision)
+                       VALUES (?,2,N'm.mahdiyon',N'مدیر خرید داخلی گروه صنعتی سرکان','waiting')""",
+                    request_id,
+                )
+                cur.execute(
+                    """INSERT INTO Project.approvals
+                       (request_id,step_no,approver_username,approver_title,decision)
+                       VALUES (?,3,N'UNASSIGNED_SPECIALIST',N'کارشناس خرید گروه صنعتی سرکان','waiting')""",
+                    request_id,
+                )
             if current_step_no == 2 and specialist_info:
                 spec_title = f"{specialist_info['role_title']} - {specialist_info['full_name']}"
                 cur.execute(
@@ -1527,7 +1541,7 @@ def decide_request(request_id):
                 cur.execute(
                     """UPDATE Project.requests
                        SET assigned_specialist=?, updated_at=GETDATE()
-                       WHERE id=? AND workflow_type='serkan'""",
+                       WHERE id=? AND workflow_type IN ('serkan','padra')""",
                     specialist_info["username"],
                     request_id,
                 )
@@ -1566,11 +1580,18 @@ def decide_request(request_id):
             if workflow_type == "padra":
                 cur.execute(
                     """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-                       VALUES (?,N'تأیید نهایی مدیرعامل پادرا',?,?)""",
+                       VALUES (?,N'تأیید مدیرعامل پادرا',?,?)""",
                     request_id,
                     current_user.username,
                     details,
                 )
+                if next_approval:
+                    cur.execute(
+                        """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+                           VALUES (?,N'ارجاع به مدیر خرید داخلی سرکان',N'SYSTEM',?)""",
+                        request_id,
+                        "درخواست پس از تأیید مدیرعامل پادرا به کارتابل مدیر خرید داخلی سرکان ارجاع شد تا کارشناس خرید تخصیص یابد.",
+                    )
             else:
                 cur.execute(
                     """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
@@ -1624,8 +1645,8 @@ def decide_request(request_id):
             )
 
         conn.commit()
-        if decision == "approved" and workflow_type == "padra":
-            flash("تأیید نهایی مدیرعامل پادرا ثبت شد؛ گردش کار این درخواست در همین مرحله به پایان رسید.", "success")
+        if decision == "approved" and workflow_type == "padra" and current_step_no == 1:
+            flash("تأیید مدیرعامل پادرا ثبت شد و درخواست به کارتابل مدیر خرید داخلی سرکان ارجاع گردید.", "success")
         elif decision == "approved" and current_step_no == 1:
             flash("تأیید مدیرعامل شرکت پادرا ثبت شد و درخواست به کارتابل مدیر خرید داخلی گروه صنعتی سرکان محول گردید.", "success")
         elif decision == "approved" and current_step_no == 2 and specialist_info:
