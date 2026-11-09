@@ -1450,7 +1450,7 @@ def export_csv():
             req_u = user_display_info(r[7])["full_name"]
             cur_u = user_display_info(r[9])["full_name"] if r[9] else "—"
             step_str = f"مرحله {r[11]} از {r[12]} ({r[10]})" if r[5] == "pending" and r[11] else status_map.get(r[5], r[5])
-            upd_str = r[8].strftime("%Y/%m/%d %H:%M") if isinstance(r[8], datetime) else str(r[8] or "")
+            upd_str = jalali_datetime(r[8]) if r[8] else ""
             writer.writerow([
                 r[1] or f"#{r[0]}",
                 r[2],
