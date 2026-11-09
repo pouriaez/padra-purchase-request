@@ -383,6 +383,22 @@ def _init_local_sqlite_db():
                 created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY(request_id) REFERENCES requests(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS request_supplier_offers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                request_item_id INTEGER NOT NULL,
+                supplier_name TEXT NOT NULL,
+                proforma_number TEXT NOT NULL,
+                delivery_date_fa TEXT NOT NULL,
+                quantity REAL NOT NULL,
+                unit_price REAL NOT NULL,
+                payment_method TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                FOREIGN KEY(request_id) REFERENCES requests(id) ON DELETE CASCADE,
+                FOREIGN KEY(request_item_id) REFERENCES request_items(id) ON DELETE CASCADE
+            );
             """
         )
 
@@ -962,7 +978,7 @@ def get_request(request_id):
         if not header:
             return None
         cur.execute(
-            """SELECT line_no,item_code,item_description,unit_name,quantity,needed_date_fa,usage_location
+            """SELECT line_no,item_code,item_description,unit_name,quantity,needed_date_fa,usage_location,id
                FROM Project.request_items WHERE request_id=? ORDER BY line_no""",
             request_id,
         )
@@ -979,12 +995,23 @@ def get_request(request_id):
             request_id,
         )
         history = cur.fetchall()
+        cur.execute(
+            """SELECT o.supplier_name,o.proforma_number,o.delivery_date_fa,
+                      i.item_description,o.quantity,o.unit_price,o.payment_method,
+                      o.created_by,o.created_at
+               FROM Project.request_supplier_offers o
+               INNER JOIN Project.request_items i ON i.id=o.request_item_id
+               WHERE o.request_id=? ORDER BY o.id""",
+            request_id,
+        )
+        supplier_offers = cur.fetchall()
         bi_stats = compute_bi_analytics(cur) if has_iam_permission("requests.assign_specialist") else None
         return {
             "header": header,
             "items": items,
             "approvals": approvals,
             "history": history,
+            "supplier_offers": supplier_offers,
             "bi_stats": bi_stats,
         }
     finally:
@@ -1055,7 +1082,7 @@ def index():
         status_filter = request.args.get("status", "").strip()
         type_filter = request.args.get("req_type", "").strip()
         search_text = request.args.get("q", "").strip()[:80]
-        allowed_statuses = {"pending", "submitted", "approved", "rejected", "my_turn"}
+        allowed_statuses = {"pending", "submitted", "approved", "rejected", "cancelled", "my_turn"}
         if status_filter not in allowed_statuses:
             status_filter = ""
         if type_filter not in {"goods", "equipment", "service", "other"}:
@@ -1210,6 +1237,7 @@ def export_csv():
             "submitted": "بدون مسیر تأیید",
             "approved": "تکمیل و سفارش‌گذاری شد",
             "rejected": "رد شده",
+            "cancelled": "لغو شده توسط ثبت‌کننده",
         }
 
         buf = io.StringIO()
@@ -1270,6 +1298,13 @@ def new_request():
             priority = "عادی"
         unit_name = request.form.get("unit_name", "").strip()
         supply_location = request.form.get("supply_location", "").strip()
+        allowed_supply_locations = {
+            "خرید داخلی گروه صنعتی سرکان",
+            "خرید خارجی گروه صنعتی سرکان",
+        }
+        if supply_location not in allowed_supply_locations:
+            flash("لطفاً یکی از دو روش تأمین داخلی یا خارجی گروه صنعتی سرکان را انتخاب نمایید.", "error")
+            return redirect(url_for("new_request"))
         fixed_asset = request.form.get("fixed_asset") == "yes"
         raw_reason = request.form.get("request_reason", "").strip()
         reason = f"[{priority}] {raw_reason}".strip() if raw_reason else f"[{priority}]"
@@ -1285,8 +1320,8 @@ def new_request():
             )
         ]
         codes, descriptions, units, quantities, needed_dates, locations = fields
-        if not unit_name or not supply_location:
-            flash("واحد درخواست‌کننده و محل تأمین الزامی هستند.", "error")
+        if not unit_name:
+            flash("نام واحد درخواست‌کننده را تایپ نمایید.", "error")
             return redirect(url_for("new_request"))
         items = []
         try:
@@ -1298,9 +1333,9 @@ def new_request():
                 if qty <= 0:
                     raise ValueError(f"مقدار ردیف {i+1} باید بیشتر از صفر باشد.")
                 needed = validate_jalali_date(needed_dates[i], f"تاریخ نیاز ردیف {i+1}")
-                unit, destination = units[i].strip(), locations[i].strip()
-                if not unit or not destination:
-                    raise ValueError(f"واحد سنجش و محل مصرف ردیف {i+1} الزامی است.")
+                unit, destination = units[i].strip(), locations[i].strip() or None
+                if not unit:
+                    raise ValueError(f"واحد سنجش ردیف {i+1} الزامی است.")
                 items.append((len(items) + 1, codes[i].strip() or None, desc, unit, qty, needed, destination))
         except (InvalidOperation, IndexError, AttributeError):
             flash("مقدار یا اطلاعات یکی از ردیف‌های کالا معتبر یا کامل نیست.", "error")
@@ -1450,7 +1485,13 @@ def decide_request(request_id):
     decision = request.form.get("decision", "").strip()
     comment = request.form.get("comment", "").strip()
     selected_specialist = request.form.get("assigned_specialist", "").strip()
-    po_reference = request.form.get("po_reference", "").strip()
+    supplier_names = request.form.getlist("supplier_name[]")
+    proforma_numbers = request.form.getlist("proforma_number[]")
+    delivery_dates = request.form.getlist("delivery_date[]")
+    supplier_item_ids = request.form.getlist("supplier_item_id[]")
+    supplier_quantities = request.form.getlist("supplier_quantity[]")
+    supplier_unit_prices = request.form.getlist("supplier_unit_price[]")
+    payment_methods = request.form.getlist("payment_method[]")
 
     if decision not in {"approved", "rejected"}:
         abort(400)
@@ -1502,8 +1543,61 @@ def decide_request(request_id):
             specialist_info = next(s for s in get_purchase_specialists() if s["username"] == selected_specialist)
 
         full_comment = comment
-        if po_reference and current_step_no == 3:
-            full_comment = f"شماره سفارش/پیش‌فاکتور: {po_reference}" + (f" — {comment}" if comment else "")
+        supplier_rows = []
+        if decision == "approved" and current_step_no == 3:
+            cur.execute("SELECT id FROM Project.request_items WHERE request_id=?", request_id)
+            valid_item_ids = {str(row[0]) for row in cur.fetchall()}
+            try:
+                row_count = max(
+                    len(supplier_names), len(proforma_numbers), len(delivery_dates),
+                    len(supplier_item_ids), len(supplier_quantities),
+                    len(supplier_unit_prices), len(payment_methods)
+                )
+                for idx in range(row_count):
+                    values = [
+                        supplier_names[idx] if idx < len(supplier_names) else "",
+                        proforma_numbers[idx] if idx < len(proforma_numbers) else "",
+                        delivery_dates[idx] if idx < len(delivery_dates) else "",
+                        supplier_item_ids[idx] if idx < len(supplier_item_ids) else "",
+                        supplier_quantities[idx] if idx < len(supplier_quantities) else "",
+                        supplier_unit_prices[idx] if idx < len(supplier_unit_prices) else "",
+                        payment_methods[idx] if idx < len(payment_methods) else "",
+                    ]
+                    if not any(str(v).strip() for v in values):
+                        continue
+                    supplier, proforma, delivery, item_id, qty_raw, price_raw, payment = [str(v).strip() for v in values]
+                    if not all([supplier, proforma, delivery, item_id, qty_raw, price_raw, payment]):
+                        raise ValueError(f"اطلاعات تأمین‌کننده در ردیف {idx + 1} کامل نیست.")
+                    if item_id not in valid_item_ids:
+                        raise ValueError(f"قلم کالای انتخاب‌شده در ردیف {idx + 1} معتبر نیست.")
+                    delivery = validate_jalali_date(delivery, f"تاریخ تحویل ردیف {idx + 1}")
+                    qty = Decimal(normalize_digits(qty_raw).replace(",", ""))
+                    price = Decimal(normalize_digits(price_raw).replace(",", ""))
+                    if qty <= 0 or price <= 0:
+                        raise ValueError(f"تعداد و فی واحد در ردیف {idx + 1} باید بیشتر از صفر باشد.")
+                    supplier_rows.append((int(item_id), supplier, proforma, delivery, qty, price, payment))
+            except (InvalidOperation, IndexError, ValueError) as exc:
+                conn.rollback()
+                flash(str(exc) if isinstance(exc, ValueError) else "تعداد یا فی واحد یکی از تأمین‌کنندگان معتبر نیست.", "error")
+                return redirect(url_for("view_request", request_id=request_id))
+            if not supplier_rows:
+                conn.rollback()
+                flash("برای تکمیل خرید، حداقل یک ردیف اطلاعات تأمین‌کننده ثبت نمایید.", "error")
+                return redirect(url_for("view_request", request_id=request_id))
+            cur.execute("DELETE FROM Project.request_supplier_offers WHERE request_id=?", request_id)
+            for offer in supplier_rows:
+                cur.execute(
+                    """INSERT INTO Project.request_supplier_offers
+                       (request_id,request_item_id,supplier_name,proforma_number,delivery_date_fa,
+                        quantity,unit_price,payment_method,created_by)
+                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                    request_id, *offer, current_user.username
+                )
+            supplier_summary = "؛ ".join(
+                f"{row[1]} | پیش‌فاکتور {row[2]} | تعداد {row[4]} | فی {row[5]}"
+                for row in supplier_rows
+            )
+            full_comment = (comment + " — " if comment else "") + "اطلاعات تأمین‌کنندگان: " + supplier_summary
 
         cur.execute(
             """UPDATE Project.approvals SET decision=?,comment=?,decided_at=GETDATE()
@@ -1664,6 +1758,67 @@ def decide_request(request_id):
             conn.rollback()
         app.logger.exception("Approval action failed")
         flash("ثبت تصمیم انجام نشد.", "error")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return redirect(url_for("view_request", request_id=request_id))
+
+
+@app.route("/request/<int:request_id>/cancel", methods=["POST"])
+@login_required
+def cancel_request(request_id):
+    if not has_iam_permission("requests.create"):
+        abort(403)
+    reason = request.form.get("cancel_reason", "").strip()
+    conn = cur = None
+    try:
+        conn = data_db()
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT r.requester_username,r.workflow_type,r.status,a.id
+               FROM Project.requests r
+               INNER JOIN Project.approvals a ON a.request_id=r.id
+               WHERE r.id=? AND a.step_no=1 AND a.decision='pending'
+                 AND a.approver_username=N'i.heydari'""",
+            request_id,
+        )
+        row = cur.fetchone()
+        if not row or row[0] != current_user.username or row[1] != "padra" or row[2] != "pending":
+            conn.rollback()
+            abort(403)
+        cur.execute(
+            """UPDATE Project.approvals
+               SET decision='cancelled',comment=?,decided_at=GETDATE()
+               WHERE request_id=? AND decision IN ('pending','waiting')""",
+            reason or "لغو درخواست توسط کارشناس ثبت خرید پادرا پیش از بررسی مدیرعامل",
+            request_id,
+        )
+        cur.execute(
+            "UPDATE Project.requests SET status='cancelled',updated_at=GETDATE() WHERE id=?",
+            request_id,
+        )
+        details = "درخواست توسط کارشناس ثبت خرید پادرا، پیش از اقدام مدیرعامل لغو شد."
+        if reason:
+            details += " علت لغو: " + reason
+        cur.execute(
+            """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+               VALUES (?,N'لغو درخواست توسط ثبت‌کننده پادرا',?,?)""",
+            request_id,current_user.username,details,
+        )
+        conn.commit()
+        flash("درخواست با موفقیت لغو شد.", "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        app.logger.exception("Padra request cancellation failed")
+        flash("لغو درخواست انجام نشد.", "error")
     finally:
         if cur:
             cur.close()
