@@ -1908,6 +1908,9 @@ def cancel_request(request_id):
     if not has_iam_permission("requests.create"):
         abort(403)
     reason = request.form.get("cancel_reason", "").strip()
+    if not reason:
+        flash("ثبت علت لغو درخواست الزامی است.", "error")
+        return redirect(url_for("view_request", request_id=request_id))
     conn = cur = None
     try:
         conn = data_db()
