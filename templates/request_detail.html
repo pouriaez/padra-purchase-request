@@ -35,7 +35,7 @@
             مرحله ۳: محول‌شده به کارشناس خرید سرکان جهت استعلام و سفارش‌گذاری
           {% endif %}
         {% else %}
-          {% if h[9]=='approved' and h[12]=='padra' %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}{{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}{% endif %}
+          {% if h[9]=='cancelled' %}درخواست توسط کارشناس ثبت خرید پادرا لغو شده است{% elif h[9]=='approved' and h[12]=='padra' %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}{{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}{% endif %}
         {% endif %}
       </h2>
       <span class="request-no">{{h[1]}}</span>
@@ -109,6 +109,8 @@
       <div><small>فرآیند سفارش‌گذاری تکمیل شد</small><b>مراحل بررسی، ارجاع مدیر خرید داخلی سرکان و اقدام کارشناس مربوطه با موفقیت انجام شده است.</b></div>
       {% endif %}
     </div>
+  {% elif h[9]=='cancelled' %}
+    <div class="current-action rejected-action"><span>×</span><div><small>درخواست لغو شده</small><b>این درخواست پیش از بررسی مدیرعامل، توسط ثبت‌کننده پادرا لغو شده است.</b></div></div>
   {% elif h[9]=='rejected' %}
     <div class="current-action rejected-action">
       <span>×</span>
@@ -126,6 +128,20 @@
   </div>
   {% endif %}
 </section>
+
+{% if h[9]=='pending' and h[12]=='padra' and h[8]==username and ns.current and ns.current[0]==1 and ns.current[1]=='i.heydari' and has_iam_permission('requests.create') %}
+<section class="panel reassign-box no-print">
+  <div class="reassign-head">
+    <b>لغو درخواست خرید</b>
+    <span>تا پیش از اقدام مدیرعامل، امکان لغو درخواست ثبت‌شده توسط شما وجود دارد.</span>
+  </div>
+  <form method="post" action="{{url_for('cancel_request',request_id=h[0])}}" class="reassign-form" onsubmit="return confirm('آیا از لغو این درخواست اطمینان دارید؟');">
+    <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+    <input name="cancel_reason" maxlength="500" placeholder="علت لغو (اختیاری)">
+    <button class="btn danger" type="submit">لغو درخواست</button>
+  </form>
+</section>
+{% endif %}
 
 {% if h[9]=='pending' and ns.current %}
   {% if h[12]=='padra' and ns.current[0] == 1 %}
@@ -228,20 +244,32 @@
       </div>
       <form method="post" action="{{url_for('decide_request',request_id=h[0])}}">
         <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
-        <div class="form-grid two-cols">
-          <div class="field">
-            <label>شماره پیش‌فاکتور / سفارش خرید و نام تأمین‌کننده</label>
-            <input id="po-ref-input" name="po_reference" placeholder="مثلاً پیش‌فاکتور ۱۴۰۵/۴۱۲ - شرکت تامین صنعت">
-          </div>
-          <div class="field">
-            <label>گزارش اقدام و توضیحات نهایی کارشناس خرید</label>
-            <input id="decision-comment" name="comment" maxlength="1000" placeholder="نحوه ارسال، زمان تحویل به انبار پادرا و توضیحات تکمیلی...">
-          </div>
+        <div class="workbench-head">
+          <p>برای هر قلم کالا و هر تأمین‌کننده، یک ردیف جداگانه ثبت کنید. امکان ثبت چند تأمین‌کننده و چند پیش‌فاکتور وجود دارد.</p>
         </div>
-        <div class="quick-chips-row">
-          <span class="quick-chips-label">ثبت سریع گزارش تأمین:</span>
-          <button type="button" class="quick-chip" onclick="fillSpecialistDemo('PO-1405-8840 · تأمین‌کننده مجاز سرکان', 'سفارش‌گذاری قطعی انجام شد و حواله بارگیری به مقصد انبار کارخانه پادرا صادر گردید.')">نمونه تکمیل خرید و صدور حواله انبار</button>
-          <button type="button" class="quick-chip" onclick="fillSpecialistDemo('INV-1405-309 · بازرگانی صنعت‌پارت', 'پس از اخذ ۳ استعلام بها، خرید انجام و کالا تحویل انبار پادرا گردید.')">نمونه خرید پس از ۳ استعلام بها</button>
+        <div class="table-wrap">
+          <table class="items-table supplier-offers-table">
+            <thead><tr><th>قلم درخواستی</th><th>نام تأمین‌کننده</th><th>شماره پیش‌فاکتور</th><th>تاریخ تحویل (شمسی)</th><th>تعداد</th><th>فی واحد</th><th>نحوه پرداخت</th><th class="no-print">حذف</th></tr></thead>
+            <tbody id="supplier-offers-body">
+              <tr class="supplier-offer-row">
+                <td><select name="supplier_item_id[]" required>{% for x in data.items %}<option value="{{x[7]}}">{{x[2]}}</option>{% endfor %}</select></td>
+                <td><input name="supplier_name[]" required placeholder="نام تأمین‌کننده"></td>
+                <td><input name="proforma_number[]" required placeholder="شماره پیش‌فاکتور"></td>
+                <td><input name="delivery_date[]" required placeholder="۱۴۰۵/۰۹/۱۵"></td>
+                <td><input name="supplier_quantity[]" required type="number" min="0.001" step="0.001" placeholder="تعداد"></td>
+                <td><input name="supplier_unit_price[]" required type="number" min="0.01" step="0.01" placeholder="ریال"></td>
+                <td><input name="payment_method[]" required placeholder="مثلاً ۵۰٪ نقد، ۵۰٪ پس از تحویل"></td>
+                <td class="no-print"><button type="button" class="remove-row remove-supplier-row">×</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn secondary small" id="add-supplier-row">＋ افزودن تأمین‌کننده / پیش‌فاکتور</button>
+        </div>
+        <div class="field full-field">
+          <label>گزارش اقدام و توضیحات نهایی کارشناس خرید</label>
+          <textarea id="decision-comment" name="comment" rows="2" maxlength="1000" placeholder="توضیحات تکمیلی، نحوه ارسال و هماهنگی تحویل به انبار پادرا..."></textarea>
         </div>
         <div class="form-actions">
           <button class="btn primary" name="decision" value="approved">✓ ثبت انجام سفارش‌گذاری و تکمیل نهایی خرید</button>
@@ -433,11 +461,20 @@
       el.focus();
     }
   }
-  function fillSpecialistDemo(poRef, commentText) {
-    var po = document.getElementById('po-ref-input');
-    var cm = document.getElementById('decision-comment');
-    if (po) po.value = poRef;
-    if (cm) cm.value = commentText;
-  }
+  (function() {
+    var offersBody = document.getElementById('supplier-offers-body');
+    var addOffer = document.getElementById('add-supplier-row');
+    if (!offersBody || !addOffer) return;
+    addOffer.addEventListener('click', function() {
+      var row = offersBody.querySelector('.supplier-offer-row').cloneNode(true);
+      row.querySelectorAll('input').forEach(function(input) { input.value = ''; });
+      offersBody.appendChild(row);
+    });
+    offersBody.addEventListener('click', function(event) {
+      if (event.target.classList.contains('remove-supplier-row') && offersBody.querySelectorAll('.supplier-offer-row').length > 1) {
+        event.target.closest('tr').remove();
+      }
+    });
+  })();
 </script>
 {% endblock %}
