@@ -729,9 +729,11 @@ def compute_bi_analytics(cur) -> dict:
         """SELECT a.step_no, COUNT(DISTINCT a.request_id)
            FROM Project.approvals a
            INNER JOIN Project.requests r ON r.id = a.request_id
-           WHERE r.workflow_type IN ('serkan','padra')
-             AND r.status = 'pending' AND a.decision = 'pending'
-             AND a.step_no IN (2,3)
+           WHERE r.status = 'pending' AND a.decision = 'pending'
+             AND (
+                 (a.step_no = 1 AND r.workflow_type = 'padra')
+                 OR (a.step_no IN (2,3) AND r.workflow_type IN ('serkan','padra'))
+             )
            GROUP BY a.step_no"""
     )
     stage_Waiting = {1: 0, 2: 0, 3: 0}
