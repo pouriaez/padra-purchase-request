@@ -488,7 +488,7 @@
         </span>
         <strong>{{{'waiting':'در صف انتظار مرحله قبل','pending':'در دست بررسی و اقدام','approved':'✓ تأیید و انجام شد','rejected':'× رد شد','cancelled':'لغو شد'}.get(a[3],a[3])}}</strong>
         <small>{{a[5]|jalali_datetime if a[5] else 'هنوز اقدامی ثبت نشده'}}</small>
-        {% if a[4] %}<small class="approval-comment">«{{a[4]}}»</small>{% endif %}
+        {% if a[4] and not is_padra_purchase_user %}<small class="approval-comment">«{{a[4]}}»</small>{% endif %}
       </div>
     {% else %}
       <div class="empty-inline">مسیر تأیید برای این نوع درخواست تعریف نشده است.</div>
@@ -545,7 +545,7 @@
               <b>{{actor_meta.full_name}}</b> ({{actor_meta.role_title}})
             {% endif %}
           </div>
-          {% if item[2] %}<p>{{item[2]}}</p>{% endif %}
+          {% if item[2] and not is_padra_purchase_user %}<p>{{item[2]}}</p>{% endif %}
         </div>
       </article>
     {% endfor %}
