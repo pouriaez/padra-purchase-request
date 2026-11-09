@@ -1,15 +1,19 @@
 SET NOCOUNT ON;
+
+-- Add the column in its own batch. SQL Server otherwise compiles later
+-- statements before the ALTER TABLE has made workflow_type available.
+IF COL_LENGTH(N'Project.requests', N'workflow_type') IS NULL
+BEGIN
+    EXEC(N'ALTER TABLE Project.requests
+          ADD workflow_type VARCHAR(20) NOT NULL
+              CONSTRAINT DF_purchase_requests_workflow_type DEFAULT (''serkan'') WITH VALUES;');
+END;
+GO
+
 SET XACT_ABORT ON;
 
 BEGIN TRY
     BEGIN TRANSACTION;
-
-    IF COL_LENGTH(N'Project.requests', N'workflow_type') IS NULL
-    BEGIN
-        ALTER TABLE Project.requests
-        ADD workflow_type VARCHAR(20) NOT NULL
-            CONSTRAINT DF_purchase_requests_workflow_type DEFAULT ('serkan') WITH VALUES;
-    END;
 
     IF NOT EXISTS (
         SELECT 1
