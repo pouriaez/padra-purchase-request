@@ -129,7 +129,7 @@ def get_purchase_specialists():
         conn = auth_db()
         cur = conn.cursor()
         cur.execute(
-            """SELECT DISTINCT u.username
+            """SELECT DISTINCT u.username, COALESCE(NULLIF(u.full_name,N''),N'')
                FROM Project.loginusers u
                INNER JOIN Project.IAM_UserRoles ur ON ur.user_id = u.id
                INNER JOIN Project.IAM_Roles r ON r.id = ur.role_id
@@ -145,8 +145,8 @@ def get_purchase_specialists():
         return [
             {
                 "username": item[0],
-                "full_name": display_names.get(item[0], item[0]),
-                "role_title": "کارشناس خرید داخلی",
+                "full_name": display_names.get(item[0]) or (item[1] or "").strip() or item[0],
+                "role_title": "کارشناس خرید داخلی گروه صنعتی سرکان",
                 "org": "گروه صنعتی سرکان",
                 "badge_color": "teal",
             }
@@ -747,6 +747,49 @@ def validate_jalali_date(value, label):
 
 
 def user_display_info(username: str) -> dict:
+    fixed_users = {
+        "i.heydari": {
+            "username": username,
+            "full_name": "ایمان حیدری",
+            "role_title": "مدیرعامل پادرا",
+            "org": "شرکت پادرا",
+            "badge_color": "navy",
+        },
+        "m.mahdiyon": {
+            "username": username,
+            "full_name": "محمد مهدیون",
+            "role_title": "مدیر خرید داخلی گروه صنعتی سرکان",
+            "org": "گروه صنعتی سرکان",
+            "badge_color": "teal",
+        },
+        "kharid_padra": {
+            "username": username,
+            "full_name": "کارشناس خرید پادرا",
+            "role_title": "کارشناس خرید پادرا",
+            "org": "شرکت پادرا",
+            "badge_color": "blue",
+        },
+    }
+    if username in fixed_users:
+        info = dict(fixed_users[username])
+        if username == "kharid_padra":
+            conn = cur = None
+            try:
+                conn = auth_db()
+                cur = conn.cursor()
+                cur.execute("SELECT TOP (1) full_name FROM Project.loginusers WHERE username=?", username)
+                row = cur.fetchone()
+                if row and row[0]:
+                    info["full_name"] = str(row[0]).strip()
+            except Exception:
+                app.logger.exception("Unable to load Padra requester display name")
+            finally:
+                if cur:
+                    cur.close()
+                if conn:
+                    conn.close()
+        return info
+
     info = ORGANIZATIONAL_USERS.get(username)
     if info:
         return info
@@ -757,10 +800,32 @@ def user_display_info(username: str) -> dict:
     if specialist:
         return {
             **specialist,
-            "role_title": "کارشناس خرید داخلی",
+            "role_title": "کارشناس خرید داخلی گروه صنعتی سرکان",
             "org": "گروه صنعتی سرکان",
             "badge_color": "teal",
         }
+
+    conn = cur = None
+    try:
+        conn = auth_db()
+        cur = conn.cursor()
+        cur.execute("SELECT TOP (1) full_name FROM Project.loginusers WHERE username=?", username)
+        row = cur.fetchone()
+        if row and row[0]:
+            return {
+                "username": username,
+                "full_name": str(row[0]).strip(),
+                "role_title": "کارشناس خرید داخلی گروه صنعتی سرکان",
+                "org": "گروه صنعتی سرکان",
+                "badge_color": "teal",
+            }
+    except Exception:
+        app.logger.exception("Unable to load organizational user display name")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
     return {
         "username": username,
         "full_name": username,
@@ -1456,7 +1521,7 @@ def new_request():
                 cur.execute(
                     """INSERT INTO Project.approvals
                        (request_id,step_no,approver_username,approver_title,decision)
-                       VALUES (?,1,N'i.heydari',N'مدیرعامل شرکت پادرا','waiting')""",
+                       VALUES (?,1,N'i.heydari',N'مدیرعامل پادرا - ایمان حیدری','waiting')""",
                     request_id,
                 )
             else:
@@ -1686,17 +1751,17 @@ def decide_request(request_id):
                 cur.execute(
                     """INSERT INTO Project.approvals
                        (request_id,step_no,approver_username,approver_title,decision)
-                       VALUES (?,2,N'm.mahdiyon',N'مدیر خرید داخلی گروه صنعتی سرکان','waiting')""",
+                       VALUES (?,2,N'm.mahdiyon',N'مدیر خرید داخلی گروه صنعتی سرکان - محمد مهدیون','waiting')""",
                     request_id,
                 )
                 cur.execute(
                     """INSERT INTO Project.approvals
                        (request_id,step_no,approver_username,approver_title,decision)
-                       VALUES (?,3,N'UNASSIGNED_SPECIALIST',N'کارشناس خرید گروه صنعتی سرکان','waiting')""",
+                       VALUES (?,3,N'UNASSIGNED_SPECIALIST',N'کارشناس خرید داخلی گروه صنعتی سرکان','waiting')""",
                     request_id,
                 )
             if current_step_no == 2 and specialist_info:
-                spec_title = f"{specialist_info['role_title']} - {specialist_info['full_name']}"
+                spec_title = f"کارشناس خرید داخلی گروه صنعتی سرکان - {specialist_info['full_name']}"
                 cur.execute(
                     """UPDATE Project.approvals
                        SET approver_username=?, approver_title=?
