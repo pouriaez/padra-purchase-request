@@ -252,7 +252,7 @@
             <thead><tr><th>قلم درخواستی</th><th>نام تأمین‌کننده</th><th>انتخاب نهایی</th><th>شماره پیش‌فاکتور</th><th>تاریخ تحویل (شمسی)</th><th>تعداد</th><th>فی واحد</th><th>نحوه پرداخت</th><th class="no-print">حذف</th></tr></thead>
             <tbody id="supplier-offers-body">
               <tr class="supplier-offer-row">
-                <td><select name="supplier_item_id[]" required>{% for x in data.items %}<option value="{{x[7]}}">{{x[2]}}</option>{% endfor %}</select></td>
+                <td><select name="supplier_item_id[]" required>{% for x in data["items"] %}<option value="{{x[7]}}">{{x[2]}}</option>{% endfor %}</select></td>
                 <td><input name="supplier_name[]" required placeholder="نام تأمین‌کننده"></td>
                 <td><select name="supplier_selected[]" required><option value="0" selected>خیر</option><option value="1">بله، منتخب</option></select></td>
                 <td><input name="proforma_number[]" required placeholder="شماره پیش‌فاکتور"></td>
