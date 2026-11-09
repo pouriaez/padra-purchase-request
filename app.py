@@ -1372,15 +1372,21 @@ def index():
                     delivery_summary["pending"] += 1
                 if is_late:
                     delivery_summary["late"] += 1
-            request_totals = {}
-            for item in delivery_rows:
-                totals = request_totals.setdefault(item["request_id"], {"ordered": 0.0, "delivered": 0.0})
-                totals["ordered"] += item["ordered"]
-                totals["delivered"] += item["delivered"]
-            for req_id, totals in request_totals.items():
-                if totals["delivered"] >= totals["ordered"]:
+            cur.execute(
+                """SELECT o.request_id,SUM(o.quantity),SUM(COALESCE(d.delivered_quantity,0))
+                   FROM Project.request_supplier_offers o
+                   LEFT JOIN (
+                       SELECT offer_id,SUM(quantity) AS delivered_quantity
+                       FROM Project.request_deliveries GROUP BY offer_id
+                   ) d ON d.offer_id=o.id
+                   GROUP BY o.request_id"""
+            )
+            for req_id, ordered_total, delivered_total in cur.fetchall():
+                ordered_total = float(ordered_total or 0)
+                delivered_total = float(delivered_total or 0)
+                if delivered_total >= ordered_total:
                     request_delivery_status[req_id] = "تحویل شده"
-                elif totals["delivered"] > 0:
+                elif delivered_total > 0:
                     request_delivery_status[req_id] = "در حال تحویل"
                 else:
                     request_delivery_status[req_id] = "سفارش‌گذاری شده"
