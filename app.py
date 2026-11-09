@@ -1117,7 +1117,8 @@ def index():
                     COALESCE(p.step_no,0) AS current_step,
                     COALESCE(st.total_steps,0) AS total_steps,
                     COALESCE(it.item_count,0) AS item_count,
-                    COALESCE(r.request_reason,N'') AS request_reason
+                    COALESCE(r.request_reason,N'') AS request_reason,
+                    r.workflow_type
                FROM Project.requests r
                OUTER APPLY (
                    SELECT TOP (1) a.approver_username,a.approver_title,a.step_no
