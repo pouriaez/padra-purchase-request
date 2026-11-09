@@ -1791,7 +1791,7 @@ def cancel_request(request_id):
             abort(403)
         cur.execute(
             """UPDATE Project.approvals
-               SET decision='cancelled',comment=?,decided_at=GETDATE()
+               SET decision='rejected',comment=?,decided_at=GETDATE()
                WHERE request_id=? AND decision IN ('pending','waiting')""",
             reason or "لغو درخواست توسط کارشناس ثبت خرید پادرا پیش از بررسی مدیرعامل",
             request_id,
