@@ -331,6 +331,7 @@ def _init_local_sqlite_db():
                 fixed_asset INTEGER NOT NULL DEFAULT 0,
                 request_reason TEXT,
                 requester_username TEXT NOT NULL,
+                workflow_type TEXT NOT NULL DEFAULT 'serkan',
                 status TEXT NOT NULL DEFAULT 'pending',
                 assigned_specialist TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
@@ -384,6 +385,11 @@ def _init_local_sqlite_db():
             );
             """
         )
+
+        cur.execute("PRAGMA table_info(requests)")
+        request_columns = {row[1] for row in cur.fetchall()}
+        if "workflow_type" not in request_columns:
+            cur.execute("ALTER TABLE requests ADD COLUMN workflow_type TEXT NOT NULL DEFAULT 'serkan'")
 
         cur.execute("SELECT COUNT(*) FROM loginusers")
         if cur.fetchone()[0] == 0:
@@ -1371,7 +1377,10 @@ def new_request():
             else:
                 cur.execute("UPDATE Project.requests SET status='submitted' WHERE id=?", request_id)
             conn.commit()
-            flash(f"درخواست خرید {request_no} با موفقیت ثبت و به کارتابل مدیرعامل شرکت پادرا ارسال شد.", "success")
+            if workflow_type == "padra":
+                flash(f"درخواست خرید {request_no} با موفقیت ثبت و فقط برای تأیید نهایی به کارتابل مدیرعامل پادرا ارسال شد.", "success")
+            else:
+                flash(f"درخواست خرید {request_no} با موفقیت ثبت و به کارتابل مسئول مرحله اول ({first_approval[3]} - {first_approval[2]}) ارسال شد.", "success")
             return redirect(url_for("view_request", request_id=request_id))
         except Exception:
             if conn:
