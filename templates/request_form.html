@@ -61,23 +61,14 @@
       </div>
       <div class="field">
         <label>واحد درخواست‌کننده در شرکت پادرا *</label>
-        <input id="f-unit-name" name="unit_name" required list="padra-units" placeholder="انتخاب یا تایپ واحد (مثلاً تولید، نت، آزمایشگاه)">
-        <datalist id="padra-units">
-          <option value="تولید و مونتاژ - پادرا">
-          <option value="نگهداری و تعمیرات (نت) - پادرا">
-          <option value="برنامه‌ریزی و کنترل تولید - پادرا">
-          <option value="کنترل کیفیت و آزمایشگاه - پادرا">
-          <option value="انبار و لجستیک - پادرا">
-          <option value="فنی و مهندسی - پادرا">
-        </datalist>
+        <input id="f-unit-name" name="unit_name" required placeholder="نام واحد درخواست‌کننده را تایپ نمایید">
       </div>
       <div class="field">
+        <label>محل و نحوه تأمین *</label>      <div class="field">
         <label>محل و نحوه تأمین *</label>
         <select id="f-supply-location" name="supply_location" required>
-          <option value="خرید داخلی (گروه صنعتی سرکان)" selected>خرید داخلی (گروه صنعتی سرکان)</option>
-          <option value="انبار مرکزی">انبار مرکزی پادرا / سرکان</option>
-          <option value="خرید خارجی / بازرگانی">خرید خارجی / بازرگانی</option>
-          <option value="سایر">سایر</option>
+          <option value="خرید داخلی گروه صنعتی سرکان" selected>خرید داخلی گروه صنعتی سرکان</option>
+          <option value="خرید خارجی گروه صنعتی سرکان">خرید خارجی گروه صنعتی سرکان</option>
         </select>
       </div>
       <div class="field">
@@ -128,7 +119,7 @@
             <th>واحد سنجش *</th>
             <th>مقدار *</th>
             <th>تاریخ نیاز (شمسی) *</th>
-            <th>محل مصرف در پادرا *</th>
+            <th>محل مصرف در پادرا</th>
             <th class="no-print">حذف</th>
           </tr>
         </thead>
@@ -140,13 +131,13 @@
             <td><input name="item_unit[]" list="common-units" required placeholder="عدد / کیلوگرم / متر"></td>
             <td><input name="quantity[]" required type="number" min="0.001" step="0.001" placeholder="۰"></td>
             <td><input name="needed_date[]" required value="{{today}}" placeholder="۱۴۰۵/۰۸/۱۵"></td>
-            <td><input name="usage_location[]" required placeholder="مثلاً خط تولید ۱ / سالن مونتاژ"></td>
+            <td><input name="usage_location[]" placeholder="مثلاً خط تولید ۱ / سالن مونتاژ"></td>
             <td class="no-print"><button type="button" class="remove-row" aria-label="حذف ردیف">×</button></td>
           </tr>
         </tbody>
       </table>
     </div>
-    <div class="paper-note">توجه: تکمیل شرح کالا، واحد سنجش، مقدار، تاریخ نیاز و محل مصرف برای هر ردیف الزامی است.</div>
+    <div class="paper-note">تکمیل شرح کالا، واحد سنجش، مقدار و تاریخ نیاز برای هر ردیف الزامی است؛ محل مصرف اختیاری است.</div>
 
     <div class="signature-grid four-cols">
       <div class="signature">
