@@ -1513,14 +1513,13 @@ def decide_request(request_id):
                     spec_title,
                     request_id,
                 )
-                try:
-                    cur.execute(
-                        "UPDATE Project.requests SET assigned_specialist=? WHERE id=?",
-                        specialist_info["username"],
-                        request_id,
-                    )
-                except Exception:
-                    pass
+                cur.execute(
+                    """UPDATE Project.requests
+                       SET assigned_specialist=?, updated_at=GETDATE()
+                       WHERE id=? AND workflow_type='serkan'""",
+                    specialist_info["username"],
+                    request_id,
+                )
 
             cur.execute(
                 """SELECT TOP (1) id FROM Project.approvals
