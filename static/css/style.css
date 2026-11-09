@@ -2846,3 +2846,114 @@ tbody tr:hover td {
     color: inherit;
   }
 }
+
+
+/* Supplier selection and staged delivery monitoring */
+.delivery-dashboard-panel,
+.delivery-monitor-panel {
+  margin-top: 22px;
+}
+.delivery-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.delivery-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg-subtle);
+}
+.delivery-kpi small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.delivery-kpi b {
+  color: var(--ink);
+  font-size: 23px;
+  font-variant-numeric: tabular-nums;
+}
+.delivery-kpi.overdue b {
+  color: #b45309;
+}
+.delivery-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.delivery-status.complete {
+  color: #166534;
+  background: #dcfce7;
+}
+.delivery-status.late {
+  color: #9a3412;
+  background: #ffedd5;
+}
+.delivery-status.waiting {
+  color: var(--ink-secondary);
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+}
+.delivery-entry-box {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-subtle);
+}
+.delivery-entry-box h3,
+.delivery-history-title {
+  margin: 0 0 8px;
+}
+.delivery-entry-box p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.delivery-entry-form {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+.delivery-entry-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.delivery-entry-form input,
+.delivery-entry-form select {
+  width: 100%;
+  min-width: 0;
+}
+.delivery-history-title {
+  margin-top: 22px;
+}
+.delivery-dashboard-table td,
+.delivery-dashboard-table th {
+  white-space: nowrap;
+}
+@media (max-width: 1050px) {
+  .delivery-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .delivery-entry-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .delivery-kpi-grid,
+  .delivery-entry-form {
+    grid-template-columns: 1fr;
+  }
+}
