@@ -312,17 +312,17 @@
   </div>
   <div class="table-wrap">
     <table class="items-table">
-      <thead><tr><th>قلم کالا</th><th>تأمین‌کننده منتخب</th><th>تاریخ وعده</th><th>سفارش</th><th>تحویل‌شده</th><th>مانده</th></tr></thead>
+      <thead><tr><th>قلم کالا</th><th>واحد</th><th>تأمین‌کننده منتخب</th><th>تاریخ وعده</th><th>سفارش</th><th>تحویل‌شده</th><th>مانده</th></tr></thead>
       <tbody>
         {% for p in data.delivery_progress %}
-        <tr><td>{{p[2]}}</td><td><b>{{p[1]}}</b></td><td>{{p[3]}}</td><td>{{p[4]}}</td><td>{{p[5]}}</td><td><b>{{[p[4]-p[5],0]|max}}</b></td></tr>
+        <tr><td>{{p[2]}}</td><td>{{p[3]}}</td><td><b>{{p[1]}}</b></td><td>{{p[4]}}</td><td>{{p[5]}}</td><td>{{p[6]}}</td><td><b>{{[p[5]-p[6],0]|max}}</b></td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% set delivery_state = namespace(has_remaining=false) %}
   {% for p in data.delivery_progress %}
-    {% if p[4]-p[5] > 0 %}{% set delivery_state.has_remaining = true %}{% endif %}
+    {% if p[5]-p[6] > 0 %}{% set delivery_state.has_remaining = true %}{% endif %}
   {% endfor %}
   {% if can_record_delivery and delivery_state.has_remaining %}
   <div class="delivery-entry-box">
@@ -333,7 +333,7 @@
       <label>قلم / تأمین‌کننده منتخب
         <select name="offer_id" required>
           {% for p in data.delivery_progress %}
-            {% if p[4]-p[5] > 0 %}<option value="{{p[0]}}">{{p[2]}} — {{p[1]}} (مانده: {{p[4]-p[5]}})</option>{% endif %}
+            {% if p[5]-p[6] > 0 %}<option value="{{p[0]}}">{{p[2]}} — {{p[1]}} (مانده: {{p[5]-p[6]}})</option>{% endif %}
           {% endfor %}
         </select>
       </label>
@@ -438,10 +438,10 @@
   <div class="section-caption">۴. پایش تحویل سفارش</div>
   <div class="table-wrap">
     <table class="items-table">
-      <thead><tr><th>قلم کالا</th><th>تأمین‌کننده منتخب</th><th>تاریخ وعده تحویل</th><th>تعداد سفارش</th><th>تحویل‌شده</th><th>مانده</th></tr></thead>
+      <thead><tr><th>قلم کالا</th><th>واحد</th><th>تأمین‌کننده منتخب</th><th>تاریخ وعده تحویل</th><th>تعداد سفارش</th><th>تحویل‌شده</th><th>مانده</th></tr></thead>
       <tbody>
         {% for p in data.delivery_progress %}
-        <tr><td>{{p[2]}}</td><td>{{p[1]}}</td><td>{{p[3]}}</td><td>{{p[4]}}</td><td>{{p[5]}}</td><td>{{[p[4]-p[5],0]|max}}</td></tr>
+        <tr><td>{{p[2]}}</td><td>{{p[3]}}</td><td>{{p[1]}}</td><td>{{p[4]}}</td><td>{{p[5]}}</td><td>{{p[6]}}</td><td>{{[p[5]-p[6],0]|max}}</td></tr>
         {% endfor %}
       </tbody>
     </table>
