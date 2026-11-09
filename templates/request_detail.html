@@ -24,7 +24,7 @@
 <section class="panel tracking-overview no-print">
   <div class="overview-top">
     <div>
-      <small>وضعیت جاری در زنجیره تأمین شرکت پادرا ← گروه صنعتی سرکان</small>
+      <small>{% if h[12]=='padra' %}وضعیت درخواست در گردش داخلی شرکت پادرا{% else %}وضعیت درخواست در گردش خرید داخلی سرکان{% endif %}</small>
       <h2>
         {% if h[9]=='pending' and ns.current %}
           {% if ns.current[0]==1 %}
@@ -35,7 +35,7 @@
             مرحله ۳: محول‌شده به کارشناس خرید سرکان جهت استعلام و سفارش‌گذاری
           {% endif %}
         {% else %}
-          {{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}
+          {% if h[9]=='approved' and h[12]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}{% endif %}
         {% endif %}
       </h2>
       <span class="request-no">{{h[1]}}</span>
@@ -117,7 +117,7 @@
 
   {% if data.approvals %}
   <div class="progress-head">
-    <b>پیشرفت زنجیره تأیید و تدارکات (پادرا ← سرکان)</b>
+    <b>{% if h[12]=='padra' %}پیشرفت تأیید نهایی پادرا{% else %}پیشرفت زنجیره تأیید و خرید سرکان{% endif %}</b>
     <span>{{ns.done}} از {{data.approvals|length}} مرحله تکمیل شده</span>
   </div>
   <div class="progress-track">
