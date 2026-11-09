@@ -126,8 +126,8 @@
         <tbody id="items-body">
           <tr class="item-row">
             <td class="row-number">۱</td>
-            <td><input name="item_code[]" placeholder="مثلاً PDR-101"></td>
-            <td><input name="item_description[]" required placeholder="شرح کامل فنی و مشخصات کالا"></td>
+            <td class="part-search-cell"><input class="part-code-input" name="item_code[]" autocomplete="off" placeholder="جستجوی کد کالا یا نام کالا"></td>
+            <td class="part-search-cell"><input class="part-name-input" name="item_description[]" required autocomplete="off" placeholder="برای جستجو نام کالا را تایپ کنید"></td>
             <td><input name="item_unit[]" list="common-units" required placeholder="عدد / کیلوگرم / متر"></td>
             <td><input name="quantity[]" required type="number" min="0.001" step="0.001" placeholder="۰"></td>
             <td><input name="needed_date[]" required value="{{today}}" placeholder="۱۴۰۵/۰۸/۱۵"></td>
@@ -174,6 +174,80 @@
 <script>
 const body = document.getElementById('items-body');
 const faDigits = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
+
+const partSearchTimers = new WeakMap();
+body.addEventListener('input', event => {
+  const input = event.target;
+  if (!input.matches('.part-code-input, .part-name-input')) return;
+  clearTimeout(partSearchTimers.get(input));
+  const query = input.value.trim();
+  const cell = input.closest('td');
+  let menu = cell.querySelector('.part-search-results');
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.className = 'part-search-results';
+    menu.style.cssText = 'position:absolute;z-index:1000;top:100%;right:0;left:0;max-height:260px;overflow:auto;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);';
+    cell.style.position = 'relative';
+    cell.appendChild(menu);
+  }
+  menu.replaceChildren();
+  if (query.length < 2) {
+    menu.hidden = true;
+    return;
+  }
+  menu.hidden = false;
+  const loading = document.createElement('div');
+  loading.textContent = 'در حال جستجو...';
+  loading.style.cssText = 'padding:10px;color:#64748b;font-size:12px;';
+  menu.appendChild(loading);
+  const timer = setTimeout(async () => {
+    try {
+      const response = await fetch('/api/parts?q=' + encodeURIComponent(query), {
+        headers: {'Accept': 'application/json'}
+      });
+      if (!response.ok) throw new Error('parts-search-failed');
+      const results = await response.json();
+      if (input.value.trim() !== query) return;
+      menu.replaceChildren();
+      if (!results.length) {
+        const empty = document.createElement('div');
+        empty.textContent = 'کالایی با این عبارت پیدا نشد.';
+        empty.style.cssText = 'padding:10px;color:#64748b;font-size:12px;';
+        menu.appendChild(empty);
+        return;
+      }
+      results.forEach(part => {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.style.cssText = 'display:block;width:100%;text-align:right;padding:9px 11px;border:0;border-bottom:1px solid #eef2f7;background:#fff;cursor:pointer;color:#0f172a;';
+        const code = document.createElement('strong');
+        code.textContent = part.code;
+        const name = document.createElement('span');
+        name.textContent = ' — ' + part.name;
+        option.append(code, name);
+        option.addEventListener('click', () => {
+          const row = input.closest('tr');
+          row.querySelector('.part-code-input').value = part.code;
+          row.querySelector('.part-name-input').value = part.name;
+          row.querySelectorAll('.part-search-results').forEach(el => el.hidden = true);
+        });
+        menu.appendChild(option);
+      });
+    } catch (error) {
+      menu.replaceChildren();
+      const failed = document.createElement('div');
+      failed.textContent = 'خطا در اتصال به دیتابیس کالا؛ تنظیمات اتصال SIGD را بررسی کنید.';
+      failed.style.cssText = 'padding:10px;color:#b91c1c;font-size:12px;';
+      menu.appendChild(failed);
+    }
+  }, 250);
+  partSearchTimers.set(input, timer);
+});
+document.addEventListener('click', event => {
+  if (!event.target.closest('.part-search-cell')) {
+    document.querySelectorAll('.part-search-results').forEach(menu => menu.hidden = true);
+  }
+});
 function renumber() {
   [...body.querySelectorAll('.item-row')].forEach((r, i) => r.querySelector('.row-number').textContent = faDigits(i + 1));
 }
