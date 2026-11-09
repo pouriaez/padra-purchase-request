@@ -1102,7 +1102,7 @@ def index():
                 WHERE {visibility} GROUP BY r.status""",
             *vis_params,
         )
-        counts = {key: 0 for key in ("all", "pending", "submitted", "approved", "rejected", "my_turn")}
+        counts = {key: 0 for key in ("all", "pending", "submitted", "approved", "rejected", "cancelled", "my_turn")}
         for status_name, total in cur.fetchall():
             counts["all"] += total
             if status_name in counts:
@@ -1333,7 +1333,7 @@ def new_request():
                 if qty <= 0:
                     raise ValueError(f"مقدار ردیف {i+1} باید بیشتر از صفر باشد.")
                 needed = validate_jalali_date(needed_dates[i], f"تاریخ نیاز ردیف {i+1}")
-                unit, destination = units[i].strip(), locations[i].strip() or None
+                unit, destination = units[i].strip(), locations[i].strip()
                 if not unit:
                     raise ValueError(f"واحد سنجش ردیف {i+1} الزامی است.")
                 items.append((len(items) + 1, codes[i].strip() or None, desc, unit, qty, needed, destination))
