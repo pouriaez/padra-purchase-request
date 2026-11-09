@@ -729,7 +729,8 @@ def compute_bi_analytics(cur) -> dict:
         """SELECT a.step_no, COUNT(DISTINCT a.request_id)
            FROM Project.approvals a
            INNER JOIN Project.requests r ON r.id = a.request_id
-           WHERE r.status = 'pending' AND a.decision = 'pending'
+           WHERE r.workflow_type = 'serkan'
+             AND r.status = 'pending' AND a.decision = 'pending'
            GROUP BY a.step_no"""
     )
     stage_Waiting = {1: 0, 2: 0, 3: 0}
@@ -744,7 +745,9 @@ def compute_bi_analytics(cur) -> dict:
                  SUM(CASE WHEN a.decision = 'pending' THEN 1 ELSE 0 END),
                  SUM(CASE WHEN a.decision = 'approved' THEN 1 ELSE 0 END)
                FROM Project.approvals a
-               WHERE a.approver_username = ?""",
+               INNER JOIN Project.requests r ON r.id = a.request_id
+               WHERE r.workflow_type = 'serkan'
+                 AND a.approver_username = ?""",
             uname,
         )
         row = cur.fetchone()
