@@ -17,15 +17,15 @@
 2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس `bi` اجرا کنید.
 3. فایل `sql/002_align_approval_users_with_iam.sql` را اجرا کنید تا ارجاع مرحله اول به `admin` و مرحله دوم به `m.mahdiyon` مطابق تخصیص نقش‌های IAM باشد.
 4. پس از اجرای اسکریپت ایجاد ساختار تأمین‌کنندگان `sql/007_supplier_offers_and_padra_cancellation.sql`، فایل `sql/008_supplier_selection_and_delivery_tracking.sql` را اجرا کنید تا انتخاب تأمین‌کننده و ثبت چندمرحله‌ای رسیدهای تحویل فعال شود.
-4. در همان دیتابیس، اسکریپت‌های IAM مخزن `serkan-iam` را به ترتیب `sql/001_create_iam_schema.sql`، `sql/002_seed_padra_purchase_permissions.sql` و `sql/003_padra_rbac_enforcement.sql` اجرا کنید.
-5. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
+5. در همان دیتابیس، اسکریپت‌های IAM مخزن `serkan-iam` را به ترتیب `sql/001_create_iam_schema.sql`، `sql/002_seed_padra_purchase_permissions.sql` و `sql/003_padra_rbac_enforcement.sql` اجرا کنید.
+6. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
    `python -m venv .venv`
    `.venv\\Scripts\\activate`
    `pip install -r requirements-windows.txt`
-6. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
-7. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
-8. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).
-9. آدرس برنامه: `http://SERVER:3942`
+7. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
+8. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
+9. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).
+10. آدرس برنامه: `http://SERVER:3942`
 
 ## مجوزهای SQL
 - دیتابیس احراز هویت و IAM (`AUTH_DB_NAME=bi`): دسترسی SELECT به `[Project].[loginusers]` و جداول `[Project].[IAM_Projects]`، `[Project].[IAM_Roles]`، `[Project].[IAM_UserRoles]`، `[Project].[IAM_Permissions]` و `[Project].[IAM_RolePermissions]`.
