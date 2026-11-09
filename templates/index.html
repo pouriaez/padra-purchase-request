@@ -123,7 +123,7 @@
     <div>
       <span class="bi-kicker">PROCUREMENT DELIVERY CONTROL · MANAGEMENT VIEW</span>
       <h2>داشبورد مدیریتی پایش تأمین و تحویل</h2>
-      <p>نمای یکپارچه سفارش‌های تأییدشده، تأمین‌کننده منتخب، موعد تحویل و رسیدهای ثبت‌شده</p>
+      <p>{% if username == "kharid_padra" %}نمای تعداد سفارش و موعد تحویل اقلام پادرا{% else %}نمای یکپارچه سفارش‌های تأییدشده، تأمین‌کننده منتخب، موعد تحویل و رسیدهای ثبت‌شده{% endif %}</p>
     </div>
     <div class="head-actions"><a class="btn secondary small" href="{{url_for('export_deliveries_csv')}}">⬇ دانلود گزارش تحویل CSV</a><span class="bi-credit-pill">قابل مشاهده برای مدیرعامل پادرا و مدیر خرید داخلی سرکان</span></div>
   </div>
@@ -135,7 +135,7 @@
   </div>
   <div class="table-wrap">
     <table class="items-table delivery-dashboard-table">
-      <thead><tr><th>شماره درخواست</th><th>شرح قلم</th><th>واحد</th><th>تأمین‌کننده منتخب</th><th>موعد تحویل</th><th>سفارش</th><th>تحویل‌شده</th><th>مانده</th><th>وضعیت تحویل</th><th>پرونده</th></tr></thead>
+      <thead><tr><th>شماره درخواست</th><th>شرح قلم</th><th>واحد</th>{% if username != "kharid_padra" %}<th>تأمین‌کننده منتخب</th>{% endif %}<th>موعد تحویل</th><th>سفارش</th>{% if username != "kharid_padra" %}<th>تحویل‌شده</th><th>مانده</th>{% endif %}<th>وضعیت تحویل</th><th>پرونده</th></tr></thead>
       <tbody>
         {% for d in delivery_rows %}
         <tr>
