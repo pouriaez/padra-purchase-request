@@ -861,16 +861,14 @@ def request_visibility_clause(permissions):
         params.append(current_user.username)
     if "requests.view_assigned" in permissions:
         clauses.append(
-            """(r.workflow_type = 'serkan' AND (
-                r.assigned_specialist = ? OR EXISTS (
-                    SELECT 1 FROM Project.approvals ax
-                    WHERE ax.request_id = r.id
-                      AND ax.step_no = 3
-                      AND ax.approver_username = ?
-                )
+            """(r.workflow_type = 'serkan' AND EXISTS (
+                SELECT 1 FROM Project.approvals ax
+                WHERE ax.request_id = r.id
+                  AND ax.step_no = 3
+                  AND ax.approver_username = ?
             ))"""
         )
-        params.extend([current_user.username, current_user.username])
+        params.append(current_user.username)
     if not clauses:
         abort(403)
     return "(" + " OR ".join(clauses) + ")", params
