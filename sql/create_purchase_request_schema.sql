@@ -98,16 +98,16 @@ GO
 */
 MERGE Project.approval_routes AS target
 USING (VALUES
- ('goods', 1, N'admin', N'مدیرعامل شرکت پادرا', 1),
+ ('goods', 1, N'admin', N'مسئول گردش اولیه درخواست‌های سرکان', 1),
  ('goods', 2, N'm.mahdiyon', N'مدیر خرید داخلی گروه صنعتی سرکان', 1),
  ('goods', 3, N'UNASSIGNED_SPECIALIST', N'کارشناس خرید گروه صنعتی سرکان', 1),
- ('equipment', 1, N'admin', N'مدیرعامل شرکت پادرا', 1),
+ ('equipment', 1, N'admin', N'مسئول گردش اولیه درخواست‌های سرکان', 1),
  ('equipment', 2, N'm.mahdiyon', N'مدیر خرید داخلی گروه صنعتی سرکان', 1),
  ('equipment', 3, N'UNASSIGNED_SPECIALIST', N'کارشناس خرید گروه صنعتی سرکان', 1),
- ('service', 1, N'admin', N'مدیرعامل شرکت پادرا', 1),
+ ('service', 1, N'admin', N'مسئول گردش اولیه درخواست‌های سرکان', 1),
  ('service', 2, N'm.mahdiyon', N'مدیر خرید داخلی گروه صنعتی سرکان', 1),
  ('service', 3, N'UNASSIGNED_SPECIALIST', N'کارشناس خرید گروه صنعتی سرکان', 1),
- ('other', 1, N'admin', N'مدیرعامل شرکت پادرا', 1),
+ ('other', 1, N'admin', N'مسئول گردش اولیه درخواست‌های سرکان', 1),
  ('other', 2, N'm.mahdiyon', N'مدیر خرید داخلی گروه صنعتی سرکان', 1),
  ('other', 3, N'UNASSIGNED_SPECIALIST', N'کارشناس خرید گروه صنعتی سرکان', 1)
 ) AS source (request_type, step_no, approver_username, approver_title, is_active)
