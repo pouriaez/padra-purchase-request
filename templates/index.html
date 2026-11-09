@@ -73,9 +73,9 @@
     <small>در مراحل ۱ تا ۳ چرخه پادرا - سرکان</small>
   </a>
   <a class="stat-card success {% if status_filter=='approved' %}selected{% endif %}" href="{{url_for('index',status='approved')}}">
-    <span>{% if has_iam_permission('requests.view_padra') %}تأیید نهایی مدیرعامل پادرا{% else %}سفارش‌گذاری و تکمیل شده{% endif %}</span>
+    <span>{% if has_iam_permission('requests.view_padra') %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}سفارش‌گذاری و تکمیل شده{% endif %}</span>
     <b>{{counts.approved}}</b>
-    <small>{% if has_iam_permission('requests.view_padra') %}درخواست‌های تأییدشده پادرا{% else %}تأیید نهایی و خرید انجام‌شده{% endif %}</small>
+    <small>{% if has_iam_permission('requests.view_padra') %}درخواست‌های خرید تکمیل‌شده پادرا{% else %}تأیید نهایی و خرید انجام‌شده{% endif %}</small>
   </a>
   <a class="stat-card rejected {% if status_filter=='rejected' %}selected{% endif %}" href="{{url_for('index',status='rejected')}}">
     <span>رد شده</span>
@@ -121,7 +121,7 @@
   <div class="panel-head">
     <div>
       <h2>{% if has_iam_permission('requests.view_own') and not has_iam_permission('requests.view_padra') and not has_iam_permission('requests.view_team') and not has_iam_permission('requests.view_all') %}درخواست‌های ثبت‌شده توسط من{% elif has_iam_permission('requests.view_team') %}کارتابل کارشناسان خرید سرکان{% elif has_iam_permission('requests.view_padra') %}کارتابل درخواست‌های خرید پادرا{% elif has_iam_permission('requests.view_assigned') %}کارتابل درخواست‌های ارجاع‌شده به من{% else %}فهرست درخواست‌های خرید{% endif %}</h2>
-      <p>{% if has_iam_permission('requests.view_own') and not has_iam_permission('requests.view_padra') and not has_iam_permission('requests.view_team') and not has_iam_permission('requests.view_all') %}در این بخش فقط درخواست‌هایی را می‌بینید که خودتان ثبت کرده‌اید.{% elif has_iam_permission('requests.view_team') %}فقط درخواست‌هایی نمایش داده می‌شوند که در گردش خرید داخلی سرکان به مدیر خرید یا کارشناسان سرکان ارجاع شده‌اند.{% elif has_iam_permission('requests.view_padra') %}فقط درخواست‌های ثبت‌شده توسط کارشناس خرید پادرا برای بررسی مدیرعامل نمایش داده می‌شوند.{% elif has_iam_permission('requests.view_assigned') %}در این بخش فقط درخواست‌هایی نمایش داده می‌شوند که در مرحله کارشناسی به شما ارجاع شده‌اند.{% else %}برای بررسی جزئیات، وضعیت و تاریخچه روی شماره درخواست کلیک کنید.{% endif %}</p>
+      <p>{% if has_iam_permission('requests.view_own') and not has_iam_permission('requests.view_padra') and not has_iam_permission('requests.view_team') and not has_iam_permission('requests.view_all') %}در این بخش فقط درخواست‌هایی را می‌بینید که خودتان ثبت کرده‌اید.{% elif has_iam_permission('requests.view_team') %}درخواست‌های ارجاع‌شده به مدیر خرید داخلی و کارشناسان خرید سرکان، شامل درخواست‌های تأییدشده پادرا.{% elif has_iam_permission('requests.view_padra') %}درخواست‌های پادرا در تمام مراحل گردش، از بررسی مدیرعامل تا تکمیل خرید.{% elif has_iam_permission('requests.view_assigned') %}در این بخش فقط درخواست‌هایی نمایش داده می‌شوند که در مرحله کارشناسی به شما ارجاع شده‌اند.{% else %}برای بررسی جزئیات، وضعیت و تاریخچه روی شماره درخواست کلیک کنید.{% endif %}</p>
     </div>
     <span class="count" id="visible-rows-count">{{rows|length}} مورد</span>
   </div>
