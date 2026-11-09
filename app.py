@@ -707,7 +707,7 @@ def parts_db():
     if pyodbc is None:
         raise RuntimeError("pyodbc is not installed; install requirements-windows.txt.")
     prefix = "PARTS_DB_"
-    server = os.getenv(prefix + "SERVER", r"192.168.120.38\\odsm").strip()
+    server = os.getenv(prefix + "SERVER", r"192.168.120.38\odsm").strip()
     database = os.getenv(prefix + "NAME", "SIGD").strip() or "SIGD"
     driver = os.getenv(prefix + "DRIVER", "ODBC Driver 17 for SQL Server").strip()
     user = os.getenv(prefix + "USER", "").strip()
