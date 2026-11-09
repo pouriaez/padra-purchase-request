@@ -1344,10 +1344,10 @@ def index():
                     FROM Project.requests r
                     INNER JOIN Project.request_supplier_offers o ON o.request_id=r.id AND o.is_selected=1
                     INNER JOIN Project.request_items i ON i.id=o.request_item_id
-                    OUTER APPLY (
-                        SELECT SUM(rd.quantity) AS delivered_quantity
-                        FROM Project.request_deliveries rd WHERE rd.offer_id=o.id
-                    ) d
+                    LEFT JOIN (
+                        SELECT offer_id,SUM(quantity) AS delivered_quantity
+                        FROM Project.request_deliveries GROUP BY offer_id
+                    ) d ON d.offer_id=o.id
                     WHERE {visibility}
                     ORDER BY r.id DESC,i.line_no""",
                 *vis_params,
@@ -1490,10 +1490,10 @@ def export_deliveries_csv():
                 FROM Project.requests r
                 INNER JOIN Project.request_supplier_offers o ON o.request_id=r.id AND o.is_selected=1
                 INNER JOIN Project.request_items i ON i.id=o.request_item_id
-                OUTER APPLY (
-                    SELECT SUM(rd.quantity) AS delivered_quantity
-                    FROM Project.request_deliveries rd WHERE rd.offer_id=o.id
-                ) t
+                LEFT JOIN (
+                    SELECT offer_id,SUM(quantity) AS delivered_quantity
+                    FROM Project.request_deliveries GROUP BY offer_id
+                ) t ON t.offer_id=o.id
                 LEFT JOIN Project.request_deliveries d ON d.offer_id=o.id
                 WHERE {visibility}
                 ORDER BY r.id DESC,i.line_no,d.delivery_date_fa,d.id""",
