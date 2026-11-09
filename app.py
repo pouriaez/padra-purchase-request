@@ -17,7 +17,7 @@ if VENDOR_DIR.exists() and str(VENDOR_DIR) not in sys.path:
 
 import jdatetime
 from dotenv import load_dotenv
-from flask import Flask, Response, flash, redirect, render_template, request, url_for, abort, session, g
+from flask import Flask, Response, flash, redirect, render_template, request, url_for, abort, session, g, jsonify
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.exceptions import HTTPException
@@ -702,6 +702,36 @@ def data_db():
     return db_connect(auth=False)
 
 
+def parts_db():
+    """اتصال مستقل و فقط خواندنی به دیتابیس کدینگ کالا در SIGD."""
+    if pyodbc is None:
+        raise RuntimeError("pyodbc is not installed; install requirements-windows.txt.")
+    prefix = "PARTS_DB_"
+    server = os.getenv(prefix + "SERVER", r"192.168.120.38\\odsm").strip()
+    database = os.getenv(prefix + "NAME", "SIGD").strip() or "SIGD"
+    driver = os.getenv(prefix + "DRIVER", "ODBC Driver 17 for SQL Server").strip()
+    user = os.getenv(prefix + "USER", "").strip()
+    password = os.getenv(prefix + "PASSWORD", "")
+    encrypt = os.getenv(prefix + "ENCRYPT", "no").strip()
+    trust_certificate = os.getenv(prefix + "TRUST_SERVER_CERTIFICATE", "yes").strip()
+    if not user or not password:
+        raise RuntimeError("PARTS_DB_USER and PARTS_DB_PASSWORD must be configured in .env.")
+    connection_string = ";".join([
+        f"DRIVER={{{driver}}}",
+        f"SERVER={server}",
+        f"DATABASE={database}",
+        f"UID={user}",
+        f"PWD={password}",
+        f"Encrypt={encrypt}",
+        f"TrustServerCertificate={trust_certificate}",
+    ]) + ";"
+    try:
+        return pyodbc.connect(connection_string, timeout=6, readonly=True)
+    except Exception as exc:
+        app.logger.exception("SIGD parts database connection failed")
+        raise RuntimeError("اتصال به دیتابیس SIGD برقرار نشد؛ تنظیمات PARTS_DB و دسترسی شبکه را بررسی کنید.") from exc
+
+
 def normalize_digits(value):
     table = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
     return str(value or "").translate(table).strip()
@@ -1280,6 +1310,47 @@ def export_csv():
         )
     finally:
         conn.close()
+
+
+@app.route("/api/parts")
+@login_required
+def search_parts():
+    if not has_iam_permission("requests.create"):
+        abort(403)
+    term = (request.args.get("q") or "").strip()
+    if len(term) < 2:
+        return jsonify([])
+    term = term[:100]
+    conn = cur = None
+    try:
+        conn = parts_db()
+        cur = conn.cursor()
+        pattern = "%" + term + "%"
+        cur.execute(
+            """SELECT TOP (25)
+                      CONVERT(NVARCHAR(100), [Code]) AS [Code],
+                      CONVERT(NVARCHAR(500), [Name]) AS [Name]
+               FROM [LGS].[DimPart_Padra]
+               WHERE CONVERT(NVARCHAR(100), [Code]) LIKE ?
+                  OR [Name] LIKE ?
+               ORDER BY CASE
+                   WHEN CONVERT(NVARCHAR(100), [Code]) = ? THEN 0
+                   WHEN CONVERT(NVARCHAR(100), [Code]) LIKE ? THEN 1
+                   ELSE 2 END, [Name]""",
+            (pattern, pattern, term, term + "%"),
+        )
+        return jsonify([
+            {"code": str(row[0] or ""), "name": str(row[1] or "")}
+            for row in cur.fetchall()
+        ])
+    except Exception:
+        app.logger.exception("Live part search failed")
+        return jsonify({"error": "جستجوی کالا در دیتابیس SIGD انجام نشد. تنظیمات اتصال را بررسی کنید."}), 503
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 @app.route("/request/new", methods=["GET", "POST"])
