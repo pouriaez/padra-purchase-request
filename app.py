@@ -1848,7 +1848,7 @@ def decide_request(request_id):
                         supplier_unit_prices[idx] if idx < len(supplier_unit_prices) else "",
                         payment_methods[idx] if idx < len(payment_methods) else "",
                     ]
-                    if not any(str(v).strip() for v in values):
+                    if not any(str(v).strip() for pos, v in enumerate(values) if pos != 1):
                         continue
                     supplier, selected_raw, proforma, delivery, item_id, qty_raw, price_raw, payment = [str(v).strip() for v in values]
                     if not all([supplier, proforma, delivery, item_id, qty_raw, price_raw, payment]):
