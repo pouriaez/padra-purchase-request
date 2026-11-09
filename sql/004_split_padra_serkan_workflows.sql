@@ -64,6 +64,51 @@ BEGIN TRY
           WHERE a.request_id = r.id AND a.step_no = 1
       );
 
+    -- Recover previously submitted requests that were saved before approval rows were created.
+    INSERT Project.approvals
+        (request_id, step_no, approver_username, approver_title, decision)
+    SELECT r.id, 1, N'i.heydari', N'مدیرعامل شرکت پادرا', 'pending'
+    FROM Project.requests r
+    WHERE r.workflow_type = 'padra'
+      AND r.status = 'submitted'
+      AND NOT EXISTS (
+          SELECT 1 FROM Project.approvals a WHERE a.request_id = r.id
+      );
+
+    INSERT Project.approvals
+        (request_id, step_no, approver_username, approver_title, decision)
+    SELECT r.id, route.step_no, route.approver_username, route.approver_title, 'waiting'
+    FROM Project.requests r
+    INNER JOIN Project.approval_routes route
+        ON route.request_type = r.request_type AND route.is_active = 1
+    WHERE r.workflow_type = 'serkan'
+      AND r.status = 'submitted'
+      AND NOT EXISTS (
+          SELECT 1 FROM Project.approvals a WHERE a.request_id = r.id
+      );
+
+    UPDATE a
+    SET decision = 'pending'
+    FROM Project.approvals a
+    INNER JOIN Project.requests r ON r.id = a.request_id
+    WHERE r.status = 'submitted'
+      AND a.decision = 'waiting'
+      AND a.step_no = (
+          SELECT MIN(first_step.step_no)
+          FROM Project.approvals first_step
+          WHERE first_step.request_id = r.id
+      );
+
+    UPDATE r
+    SET status = 'pending',
+        updated_at = GETDATE()
+    FROM Project.requests r
+    WHERE r.status = 'submitted'
+      AND EXISTS (
+          SELECT 1 FROM Project.approvals a
+          WHERE a.request_id = r.id AND a.decision = 'pending'
+      );
+
     IF NOT EXISTS (
         SELECT 1
         FROM sys.indexes
