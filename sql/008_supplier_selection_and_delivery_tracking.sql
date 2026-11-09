@@ -15,6 +15,19 @@ BEGIN
 END;
 GO
 
+-- Preserve legacy data: when an item has exactly one supplier offer, it is unambiguous.
+UPDATE o
+SET is_selected = 1
+FROM Project.request_supplier_offers o
+WHERE o.is_selected = 0
+  AND (
+      SELECT COUNT(*)
+      FROM Project.request_supplier_offers other_offer
+      WHERE other_offer.request_id = o.request_id
+        AND other_offer.request_item_id = o.request_item_id
+  ) = 1;
+GO
+
 DECLARE @request_id_type NVARCHAR(300);
 DECLARE @sql NVARCHAR(MAX);
 
