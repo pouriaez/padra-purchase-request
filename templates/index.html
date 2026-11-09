@@ -128,7 +128,7 @@
     <div class="head-actions"><a class="btn secondary small" href="{{url_for('export_deliveries_csv')}}">⬇ دانلود گزارش تحویل CSV</a><span class="bi-credit-pill">قابل مشاهده برای مدیرعامل پادرا و مدیر خرید داخلی سرکان</span></div>
   </div>
   <div class="delivery-kpi-grid">
-    <div class="delivery-kpi"><small>اقلام دارای تأمین‌کننده منتخب</small><b>{{delivery_summary.items}}</b></div>
+    <div class="delivery-kpi"><small>اقلام دارای تأمین‌کننده منتخب</small><b>{{delivery_summary["items"]}}</b></div>
     <div class="delivery-kpi"><small>اقلام با تحویل کامل</small><b>{{delivery_summary.complete}}</b></div>
     <div class="delivery-kpi"><small>اقلام با تحویل مانده</small><b>{{delivery_summary.pending}}</b></div>
     <div class="delivery-kpi overdue"><small>اقلام دارای تأخیر</small><b>{{delivery_summary.late}}</b></div>
@@ -222,7 +222,7 @@
           <td>{{r[4]}}</td>
           <td>
             <span class="status {{r[5]}}">
-              {% if r[5]=='approved' and r[15]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در حال بررسی و گردش کار','submitted':'ثبت‌شده؛ در انتظار تعریف مسیر تأیید','approved':'تکمیل و سفارش‌گذاری شد','rejected':'رد شده','cancelled':'لغو شده توسط ثبت‌کننده'}.get(r[5],'وضعیت نامشخص')}}{% endif %}
+              {% if r[5]=='approved' %}{{request_delivery_status.get(r[0], 'سفارش‌گذاری شده' if r[15]=='padra' else 'تأیید نهایی')}}{% else %}{{{'pending':'در حال بررسی و گردش کار','submitted':'ثبت‌شده؛ در انتظار تعریف مسیر تأیید','rejected':'رد شده','cancelled':'لغو شده توسط ثبت‌کننده'}.get(r[5],'وضعیت نامشخص')}}{% endif %}
             </span>
           </td>
           <td>
