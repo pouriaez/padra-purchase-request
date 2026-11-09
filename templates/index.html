@@ -128,20 +128,20 @@
     <div class="head-actions"><a class="btn secondary small" href="{{url_for('export_deliveries_csv')}}">⬇ دانلود گزارش تحویل CSV</a><span class="bi-credit-pill">قابل مشاهده برای مدیرعامل پادرا و مدیر خرید داخلی سرکان</span></div>
   </div>
   <div class="delivery-kpi-grid">
-    <div class="delivery-kpi"><small>اقلام دارای تأمین‌کننده منتخب</small><b>{{delivery_summary.orders}}</b></div>
-    <div class="delivery-kpi"><small>تعداد سفارش‌گذاری‌شده</small><b>{{delivery_summary.ordered|round(3)}}</b></div>
-    <div class="delivery-kpi"><small>تعداد تحویل‌شده</small><b>{{delivery_summary.delivered|round(3)}}</b></div>
-    <div class="delivery-kpi"><small>مانده قابل تحویل</small><b>{{delivery_summary.remaining|round(3)}}</b></div>
+    <div class="delivery-kpi"><small>اقلام دارای تأمین‌کننده منتخب</small><b>{{delivery_summary.items}}</b></div>
+    <div class="delivery-kpi"><small>اقلام با تحویل کامل</small><b>{{delivery_summary.complete}}</b></div>
+    <div class="delivery-kpi"><small>اقلام با تحویل مانده</small><b>{{delivery_summary.pending}}</b></div>
     <div class="delivery-kpi overdue"><small>اقلام دارای تأخیر</small><b>{{delivery_summary.late}}</b></div>
   </div>
   <div class="table-wrap">
     <table class="items-table delivery-dashboard-table">
-      <thead><tr><th>شماره درخواست</th><th>شرح قلم</th><th>تأمین‌کننده منتخب</th><th>موعد تحویل</th><th>سفارش</th><th>تحویل‌شده</th><th>مانده</th><th>وضعیت تحویل</th><th>پرونده</th></tr></thead>
+      <thead><tr><th>شماره درخواست</th><th>شرح قلم</th><th>واحد</th><th>تأمین‌کننده منتخب</th><th>موعد تحویل</th><th>سفارش</th><th>تحویل‌شده</th><th>مانده</th><th>وضعیت تحویل</th><th>پرونده</th></tr></thead>
       <tbody>
         {% for d in delivery_rows %}
         <tr>
           <td><b>{{d.request_no}}</b></td>
           <td>{{d.item}}</td>
+          <td>{{d.unit}}</td>
           <td>{{d.supplier}}</td>
           <td>{{d.expected_date}}</td>
           <td>{{d.ordered|round(3)}}</td>
