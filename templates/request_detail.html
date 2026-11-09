@@ -3,6 +3,7 @@
 {% block content %}
 {% set h=data.header %}
 {% set req_creator = user_info(h[8]) %}
+{% set is_padra_purchase_user = (username == 'kharid_padra' and h[12] == 'padra') %}
 {% set ns=namespace(current=None,done=0) %}
 {% for a in data.approvals %}
   {% if a[3]=='pending' and not ns.current %}{% set ns.current=a %}{% endif %}
@@ -307,15 +308,15 @@
 {% if data.delivery_progress %}
 <section class="panel delivery-monitor-panel no-print">
   <div class="panel-head">
-    <div><h2>پایش تأمین و تحویل سفارش</h2><p>تأمین‌کننده منتخب، تاریخ وعده تحویل، تعداد سفارش، رسیدهای ثبت‌شده و مانده قابل تحویل</p></div>
+    <div><h2>پایش تأمین و تحویل سفارش</h2><p>{% if is_padra_purchase_user %}تعداد سفارش و تاریخ وعده تحویل{% else %}تأمین‌کننده منتخب، تاریخ وعده تحویل، تعداد سفارش، رسیدهای ثبت‌شده و مانده قابل تحویل{% endif %}</p></div>
     <span class="count">{{data.delivery_progress|length}} قلم سفارش</span>
   </div>
   <div class="table-wrap">
     <table class="items-table">
-      <thead><tr><th>قلم کالا</th><th>واحد</th><th>تأمین‌کننده منتخب</th><th>تاریخ وعده</th><th>سفارش</th><th>تحویل‌شده</th><th>مانده</th></tr></thead>
+      <thead><tr><th>قلم کالا</th><th>واحد</th>{% if not is_padra_purchase_user %}<th>تأمین‌کننده منتخب</th>{% endif %}<th>تاریخ وعده</th><th>سفارش</th>{% if not is_padra_purchase_user %}<th>تحویل‌شده</th><th>مانده</th>{% endif %}</tr></thead>
       <tbody>
         {% for p in data.delivery_progress %}
-        <tr><td>{{p[2]}}</td><td>{{p[3]}}</td><td><b>{{p[1]}}</b></td><td>{{p[4]}}</td><td>{{p[5]}}</td><td>{{p[6]}}</td><td><b>{{[p[5]-p[6],0]|max}}</b></td></tr>
+        <tr><td>{{p[2]}}</td><td>{{p[3]}}</td>{% if not is_padra_purchase_user %}<td><b>{{p[1]}}</b></td>{% endif %}<td>{{p[4]}}</td><td>{{p[5]}}</td>{% if not is_padra_purchase_user %}<td>{{p[6]}}</td><td><b>{{[p[5]-p[6],0]|max}}</b></td>{% endif %}</tr>
         {% endfor %}
       </tbody>
     </table>
@@ -330,10 +331,10 @@
     <p>کارشناس خرید پادرا یا کارشناس خرید منتخب سرکان می‌تواند تحویل کامل یا بخشی از سفارش را ثبت کند.</p>
     <form method="post" action="{{url_for('record_delivery',request_id=h[0])}}" class="delivery-entry-form">
       <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
-      <label>قلم / تأمین‌کننده منتخب
+      <label>{% if is_padra_purchase_user %}قلم کالا{% else %}قلم / تأمین‌کننده منتخب{% endif %}
         <select name="offer_id" required>
           {% for p in data.delivery_progress %}
-            {% if p[5]-p[6] > 0 %}<option value="{{p[0]}}">{{p[2]}} — {{p[1]}} (مانده: {{p[5]-p[6]}})</option>{% endif %}
+            {% if p[5]-p[6] > 0 %}<option value="{{p[0]}}">{% if is_padra_purchase_user %}{{p[2]}} — تاریخ تحویل: {{p[4]}} — تعداد سفارش: {{p[5]}}{% else %}{{p[2]}} — {{p[1]}} (مانده: {{p[5]-p[6]}}){% endif %}</option>{% endif %}
           {% endfor %}
         </select>
       </label>
@@ -347,8 +348,8 @@
   {% if data.delivery_rows %}
   <h3 class="delivery-history-title">سوابق رسیدهای تحویل</h3>
   <div class="table-wrap">
-    <table class="items-table"><thead><tr><th>شماره رسید</th><th>تأمین‌کننده</th><th>قلم</th><th>تاریخ</th><th>تعداد</th><th>ثبت‌کننده</th><th>زمان ثبت</th></tr></thead>
-      <tbody>{% for d in data.delivery_rows %}<tr><td>{{d[1]}}</td><td>{{d[6]}}</td><td>{{d[7]}}</td><td>{{d[2]}}</td><td>{{d[3]}}</td><td>{{user_info(d[4]).full_name}}</td><td>{{d[5]|jalali_datetime}}</td></tr>{% endfor %}</tbody>
+    <table class="items-table"><thead><tr><th>شماره رسید</th>{% if not is_padra_purchase_user %}<th>تأمین‌کننده</th>{% endif %}<th>قلم</th><th>تاریخ</th><th>تعداد</th><th>ثبت‌کننده</th><th>زمان ثبت</th></tr></thead>
+      <tbody>{% for d in data.delivery_rows %}<tr><td>{{d[1]}}</td>{% if not is_padra_purchase_user %}<td>{{d[6]}}</td>{% endif %}<td>{{d[7]}}</td><td>{{d[2]}}</td><td>{{d[3]}}</td><td>{{user_info(d[4]).full_name}}</td><td>{{d[5]|jalali_datetime}}</td></tr>{% endfor %}</tbody>
     </table>
   </div>
   {% endif %}
@@ -418,8 +419,14 @@
     </table>
   </div>
 
-  <div class="section-caption">۳. اطلاعات تأمین‌کنندگان و پیش‌فاکتورها</div>
-  {% if data.supplier_offers %}
+  <div class="section-caption">{% if is_padra_purchase_user %}۳. تعداد خرید و تاریخ تحویل{% else %}۳. اطلاعات تأمین‌کنندگان و پیش‌فاکتورها{% endif %}</div>
+  {% if is_padra_purchase_user %}
+    {% if data.delivery_progress %}
+    <div class="table-wrap"><table class="items-table"><thead><tr><th>قلم کالا</th><th>تاریخ وعده تحویل</th><th>تعداد خرید</th></tr></thead><tbody>
+      {% for p in data.delivery_progress %}<tr><td>{{p[2]}}</td><td>{{p[4]}}</td><td>{{p[5]}}</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% else %}<p class="paper-note">هنوز تعداد خرید و تاریخ تحویل ثبت نشده است.</p>{% endif %}
+  {% elif data.supplier_offers %}
   <div class="table-wrap">
     <table class="items-table">
       <thead><tr><th>قلم کالا</th><th>تأمین‌کننده</th><th>وضعیت انتخاب</th><th>شماره پیش‌فاکتور</th><th>تاریخ وعده تحویل</th><th>تعداد سفارش</th><th>فی واحد</th><th>نحوه پرداخت</th></tr></thead>
@@ -438,10 +445,10 @@
   <div class="section-caption">۴. پایش تحویل سفارش</div>
   <div class="table-wrap">
     <table class="items-table">
-      <thead><tr><th>قلم کالا</th><th>واحد</th><th>تأمین‌کننده منتخب</th><th>تاریخ وعده تحویل</th><th>تعداد سفارش</th><th>تحویل‌شده</th><th>مانده</th></tr></thead>
+      <thead><tr><th>قلم کالا</th><th>واحد</th>{% if not is_padra_purchase_user %}<th>تأمین‌کننده منتخب</th>{% endif %}<th>تاریخ وعده تحویل</th><th>تعداد سفارش</th>{% if not is_padra_purchase_user %}<th>تحویل‌شده</th><th>مانده</th>{% endif %}</tr></thead>
       <tbody>
         {% for p in data.delivery_progress %}
-        <tr><td>{{p[2]}}</td><td>{{p[3]}}</td><td>{{p[1]}}</td><td>{{p[4]}}</td><td>{{p[5]}}</td><td>{{p[6]}}</td><td>{{[p[5]-p[6],0]|max}}</td></tr>
+        <tr><td>{{p[2]}}</td><td>{{p[3]}}</td>{% if not is_padra_purchase_user %}<td>{{p[1]}}</td>{% endif %}<td>{{p[4]}}</td><td>{{p[5]}}</td>{% if not is_padra_purchase_user %}<td>{{p[6]}}</td><td>{{[p[5]-p[6],0]|max}}</td>{% endif %}</tr>
         {% endfor %}
       </tbody>
     </table>
@@ -451,10 +458,10 @@
   <div class="section-caption">۵. رسیدهای ثبت‌شده تحویل</div>
   <div class="table-wrap">
     <table class="items-table">
-      <thead><tr><th>شماره رسید</th><th>قلم کالا</th><th>تأمین‌کننده</th><th>تاریخ تحویل</th><th>تعداد</th><th>ثبت‌کننده</th></tr></thead>
+      <thead><tr><th>شماره رسید</th><th>قلم کالا</th>{% if not is_padra_purchase_user %}<th>تأمین‌کننده</th>{% endif %}<th>تاریخ تحویل</th><th>تعداد</th><th>ثبت‌کننده</th></tr></thead>
       <tbody>
         {% for d in data.delivery_rows %}
-        <tr><td>{{d[1]}}</td><td>{{d[7]}}</td><td>{{d[6]}}</td><td>{{d[2]}}</td><td>{{d[3]}}</td><td>{{user_info(d[4]).full_name}}</td></tr>
+        <tr><td>{{d[1]}}</td><td>{{d[7]}}</td>{% if not is_padra_purchase_user %}<td>{{d[6]}}</td>{% endif %}<td>{{d[2]}}</td><td>{{d[3]}}</td><td>{{user_info(d[4]).full_name}}</td></tr>
         {% endfor %}
       </tbody>
     </table>
