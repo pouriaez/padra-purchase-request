@@ -35,7 +35,7 @@
             مرحله ۳: محول‌شده به کارشناس خرید سرکان جهت استعلام و سفارش‌گذاری
           {% endif %}
         {% else %}
-          {% if h[9]=='approved' and h[12]=='padra' %}تأیید نهایی مدیرعامل پادرا{% else %}{{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}{% endif %}
+          {% if h[9]=='approved' and h[12]=='padra' %}تأیید مدیرعامل و تکمیل خرید پادرا{% else %}{{{'pending':'در جریان تأیید','submitted':'ثبت‌شده؛ مسیر تأیید تعریف نشده','approved':'تأیید نهایی و سفارش‌گذاری تکمیل شد','rejected':'درخواست رد شده'}.get(h[9],h[9])}}{% endif %}
         {% endif %}
       </h2>
       <span class="request-no">{{h[1]}}</span>
@@ -104,7 +104,7 @@
     <div class="current-action success-action">
       <span>✓</span>
       {% if h[12]=='padra' %}
-      <div><small>تأیید نهایی پادرا</small><b>درخواست توسط ایمان حیدری، مدیرعامل پادرا، تأیید شده و گردش کار آن در همین مرحله پایان یافته است.</b></div>
+      <div><small>فرآیند خرید پادرا تکمیل شد</small><b>درخواست پس از تأیید مدیرعامل پادرا، به مدیر خرید داخلی سرکان ارجاع و توسط کارشناس خرید رسیدگی شده است.</b></div>
       {% else %}
       <div><small>فرآیند سفارش‌گذاری تکمیل شد</small><b>مراحل بررسی، ارجاع مدیر خرید داخلی سرکان و اقدام کارشناس مربوطه با موفقیت انجام شده است.</b></div>
       {% endif %}
@@ -118,7 +118,7 @@
 
   {% if data.approvals %}
   <div class="progress-head">
-    <b>{% if h[12]=='padra' %}پیشرفت تأیید نهایی پادرا{% else %}پیشرفت زنجیره تأیید و خرید سرکان{% endif %}</b>
+    <b>{% if h[12]=='padra' %}پیشرفت تأیید و خرید پادرا{% else %}پیشرفت زنجیره تأیید و خرید سرکان{% endif %}</b>
     <span>{{ns.done}} از {{data.approvals|length}} مرحله تکمیل شده</span>
   </div>
   <div class="progress-track">
@@ -128,8 +128,8 @@
 </section>
 
 {% if h[9]=='pending' and ns.current %}
-  {% if h[12]=='padra' %}
-    {% set can_act = (ns.current[1] == username) and (ns.current[0] == 1) and has_iam_permission('requests.approve.padra') %}
+  {% if h[12]=='padra' and ns.current[0] == 1 %}
+    {% set can_act = (ns.current[1] == username) and has_iam_permission('requests.approve.padra') %}
   {% else %}
     {% set can_act = (ns.current[1] == username) and has_iam_permission('requests.approve.step' ~ ns.current[0]) %}
   {% endif %}
@@ -142,7 +142,7 @@
         <span class="step-badge">{% if h[12]=='padra' %}تصمیم نهایی · شرکت پادرا{% else %}اقدام مرحله ۱ · بررسی اولیه{% endif %}</span>
         <h3>پنل بررسی و تصمیم‌گیری {% if h[12]=='padra' %}مدیرعامل شرکت پادرا{% else %}مسئول بررسی اولیه{% endif %}</h3>
         {% if h[12]=='padra' %}
-        <p>این درخواست فقط در کارتابل مدیرعامل پادرا بررسی می‌شود. با تأیید یا رد شما، گردش کار همین‌جا خاتمه پیدا می‌کند و به مدیر خرید یا کارشناسان سرکان ارجاع نخواهد شد.</p>
+        <p>این درخواست ابتدا در کارتابل مدیرعامل پادرا بررسی می‌شود. در صورت تأیید، برای تخصیص کارشناس خرید به مدیر خرید داخلی سرکان ارجاع خواهد شد.</p>
         {% else %}
         <p>درخواست پس از بررسی این مرحله طبق مسیر گردش کار سرکان به مرحله بعد ارجاع خواهد شد.</p>
         {% endif %}
@@ -164,7 +164,7 @@
           </div>
         </div>
         <div class="form-actions">
-          <button class="btn primary" name="decision" value="approved">✓ {% if h[12]=='padra' %}تأیید نهایی درخواست پادرا{% else %}تأیید و ادامه گردش کار{% endif %}</button>
+          <button class="btn primary" name="decision" value="approved">✓ {% if h[12]=='padra' %}تأیید درخواست و ارجاع به خرید سرکان{% else %}تأیید و ادامه گردش کار{% endif %}</button>
           <button class="btn danger" name="decision" value="rejected">× رد درخواست خرید</button>
         </div>
       </form>
