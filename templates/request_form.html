@@ -64,7 +64,6 @@
         <input id="f-unit-name" name="unit_name" required placeholder="نام واحد درخواست‌کننده را تایپ نمایید">
       </div>
       <div class="field">
-        <label>محل و نحوه تأمین *</label>      <div class="field">
         <label>محل و نحوه تأمین *</label>
         <select id="f-supply-location" name="supply_location" required>
           <option value="خرید داخلی گروه صنعتی سرکان" selected>خرید داخلی گروه صنعتی سرکان</option>
@@ -176,30 +175,50 @@ const body = document.getElementById('items-body');
 const faDigits = n => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
 const partSearchTimers = new WeakMap();
+const partSearchMenus = new WeakMap();
+
+function closePartMenus(except) {
+  document.querySelectorAll('.part-search-results').forEach(menu => {
+    if (menu !== except) menu.hidden = true;
+  });
+}
+
+function positionPartMenu(input, menu) {
+  const rect = input.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.left = rect.left + 'px';
+  menu.style.top = rect.bottom + 'px';
+  menu.style.width = Math.max(rect.width, 300) + 'px';
+  menu.style.maxWidth = 'min(420px, calc(100vw - 24px))';
+  menu.style.zIndex = '10000';
+}
+
 body.addEventListener('input', event => {
   const input = event.target;
   if (!input.matches('.part-code-input, .part-name-input')) return;
   clearTimeout(partSearchTimers.get(input));
   const query = input.value.trim();
-  const cell = input.closest('td');
-  let menu = cell.querySelector('.part-search-results');
+  let menu = partSearchMenus.get(input);
   if (!menu) {
     menu = document.createElement('div');
     menu.className = 'part-search-results';
-    menu.style.cssText = 'position:absolute;z-index:1000;top:100%;right:0;left:0;max-height:260px;overflow:auto;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);';
-    cell.style.position = 'relative';
-    cell.appendChild(menu);
+    menu.hidden = true;
+    document.body.appendChild(menu);
+    partSearchMenus.set(input, menu);
   }
   menu.replaceChildren();
   if (query.length < 2) {
     menu.hidden = true;
     return;
   }
+  closePartMenus(menu);
   menu.hidden = false;
+  positionPartMenu(input, menu);
   const loading = document.createElement('div');
+  loading.className = 'part-search-message';
   loading.textContent = 'در حال جستجو...';
-  loading.style.cssText = 'padding:10px;color:#64748b;font-size:12px;';
   menu.appendChild(loading);
+
   const timer = setTimeout(async () => {
     try {
       const response = await fetch('/api/parts?q=' + encodeURIComponent(query), {
@@ -207,45 +226,77 @@ body.addEventListener('input', event => {
       });
       if (!response.ok) throw new Error('parts-search-failed');
       const results = await response.json();
-      if (input.value.trim() !== query) return;
+      if (input.value.trim() !== query || !input.isConnected) return;
       menu.replaceChildren();
       if (!results.length) {
         const empty = document.createElement('div');
+        empty.className = 'part-search-message';
         empty.textContent = 'کالایی با این عبارت پیدا نشد.';
-        empty.style.cssText = 'padding:10px;color:#64748b;font-size:12px;';
         menu.appendChild(empty);
         return;
       }
       results.forEach(part => {
         const option = document.createElement('button');
         option.type = 'button';
-        option.style.cssText = 'display:block;width:100%;text-align:right;padding:9px 11px;border:0;border-bottom:1px solid #eef2f7;background:#fff;cursor:pointer;color:#0f172a;';
+        option.className = 'part-search-option';
         const code = document.createElement('strong');
         code.textContent = part.code;
         const name = document.createElement('span');
-        name.textContent = ' — ' + part.name;
+        name.textContent = part.name;
         option.append(code, name);
         option.addEventListener('click', () => {
           const row = input.closest('tr');
           row.querySelector('.part-code-input').value = part.code;
           row.querySelector('.part-name-input').value = part.name;
-          row.querySelectorAll('.part-search-results').forEach(el => el.hidden = true);
+          menu.hidden = true;
         });
         menu.appendChild(option);
       });
+      positionPartMenu(input, menu);
     } catch (error) {
+      if (!input.isConnected) return;
       menu.replaceChildren();
       const failed = document.createElement('div');
-      failed.textContent = 'خطا در اتصال به دیتابیس کالا؛ تنظیمات اتصال SIGD را بررسی کنید.';
-      failed.style.cssText = 'padding:10px;color:#b91c1c;font-size:12px;';
+      failed.className = 'part-search-message error';
+      failed.textContent = 'خطا در جستجوی کالا؛ اتصال دیتابیس SIGD را بررسی کنید.';
       menu.appendChild(failed);
     }
-  }, 250);
+  }, 300);
   partSearchTimers.set(input, timer);
 });
+
+document.addEventListener('focusin', event => {
+  if (!event.target.matches('.part-code-input, .part-name-input')) closePartMenus();
+});
 document.addEventListener('click', event => {
-  if (!event.target.closest('.part-search-cell')) {
-    document.querySelectorAll('.part-search-results').forEach(menu => menu.hidden = true);
+  if (!event.target.closest('.part-search-results') &&
+      !event.target.matches('.part-code-input, .part-name-input')) closePartMenus();
+});
+document.addEventListener('scroll', () => {
+  document.querySelectorAll('.part-search-results:not([hidden])').forEach(menu => {
+    const input = [...body.querySelectorAll('.part-code-input, .part-name-input')]
+      .find(field => partSearchMenus.get(field) === menu);
+    if (input) positionPartMenu(input, menu);
+  });
+}, true);
+window.addEventListener('resize', () => {
+  document.querySelectorAll('.part-search-results:not([hidden])').forEach(menu => {
+    const input = [...body.querySelectorAll('.part-code-input, .part-name-input')]
+      .find(field => partSearchMenus.get(field) === menu);
+    if (input) positionPartMenu(input, menu);
+  });
+});
+body.addEventListener('click', event => {
+  if (event.target.classList.contains('remove-row')) {
+    if (body.querySelectorAll('.item-row').length > 1) {
+      const row = event.target.closest('tr');
+      row.querySelectorAll('.part-code-input, .part-name-input').forEach(input => {
+        const menu = partSearchMenus.get(input);
+        if (menu) menu.remove();
+      });
+      row.remove();
+      renumber();
+    }
   }
 });
 function renumber() {
@@ -266,14 +317,6 @@ function addRowWithValues(data) {
 }
 document.getElementById('add-row').addEventListener('click', () => {
   addRowWithValues(null);
-});
-body.addEventListener('click', e => {
-  if (e.target.classList.contains('remove-row')) {
-    if (body.querySelectorAll('.item-row').length > 1) {
-      e.target.closest('tr').remove();
-      renumber();
-    }
-  }
 });
 function applyFormPreset(kind) {
   const presets = {
