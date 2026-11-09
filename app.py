@@ -1007,20 +1007,6 @@ def request_visibility_clause(permissions):
     return "(" + " OR ".join(clauses) + ")", params
 
 
-_FALLBACK_ACTIVE_USERNAME = "serkan_purchase_mgr"
-
-
-@app.before_request
-def _auto_authenticate_preview_if_needed():
-    if request.endpoint in ("static", "login", "logout", "switch_user"):
-        return
-    if not current_user.is_authenticated and not _has_sqlserver_config(auth=True):
-        if not session.get("explicit_logout"):
-            u = verify_user_by_username(_FALLBACK_ACTIVE_USERNAME)
-            if u:
-                login_user(u, remember=False)
-
-
 @app.context_processor
 def inject_organizational_context():
     return {
