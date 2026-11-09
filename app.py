@@ -1375,8 +1375,9 @@ def new_request():
                 cur.execute("UPDATE Project.approvals SET decision='pending' WHERE id=?", first_approval[0])
                 cur.execute(
                     """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-                       VALUES (?,N'ارجاع به مدیرعامل شرکت پادرا',?,?)""",
+                       VALUES (?,CASE WHEN ?='padra' THEN N'ارجاع به مدیرعامل شرکت پادرا' ELSE N'ارجاع به مسئول گردش اولیه سرکان' END,?,?)""",
                     request_id,
+                    workflow_type,
                     current_user.username,
                     f"درخواست برای مرحله {first_approval[1]} جهت بررسی و تأیید به {first_approval[3]} ({first_approval[2]}) ارسال شد.",
                 )
@@ -1573,7 +1574,7 @@ def decide_request(request_id):
             else:
                 cur.execute(
                     """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-                       VALUES (?,N'تأیید مدیرعامل شرکت پادرا',?,?)""",
+                       VALUES (?,N'تأیید مسئول گردش اولیه سرکان',?,?)""",
                     request_id,
                     current_user.username,
                     details,
