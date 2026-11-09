@@ -28,7 +28,7 @@
       <h2>
         {% if h[9]=='pending' and ns.current %}
           {% if ns.current[0]==1 %}
-            مرحله ۱: در انتظار بررسی و تأیید مدیرعامل شرکت پادرا
+            {% if h[12]=='padra' %}در انتظار تأیید نهایی مدیرعامل پادرا{% else %}مرحله ۱: در انتظار بررسی مدیرعامل شرکت پادرا{% endif %}
           {% elif ns.current[0]==2 %}
             مرحله ۲: تأییدشده توسط مدیرعامل پادرا · منتظر ارجاع مدیر خرید داخلی سرکان به کارشناس خرید
           {% else %}
@@ -102,7 +102,11 @@
   {% elif h[9]=='approved' %}
     <div class="current-action success-action">
       <span>✓</span>
-      <div><small>فرآیند سفارش‌گذاری تکمیل شد</small><b>تأیید مدیرعامل شرکت پادرا، ارجاع مدیر خرید داخلی سرکان و خرید توسط کارشناس مربوطه با موفقیت انجام شده است.</b></div>
+      {% if h[12]=='padra' %}
+      <div><small>تأیید نهایی پادرا</small><b>درخواست توسط ایمان حیدری، مدیرعامل پادرا، تأیید شده و گردش کار آن در همین مرحله پایان یافته است.</b></div>
+      {% else %}
+      <div><small>فرآیند سفارش‌گذاری تکمیل شد</small><b>مراحل بررسی، ارجاع مدیر خرید داخلی سرکان و اقدام کارشناس مربوطه با موفقیت انجام شده است.</b></div>
+      {% endif %}
     </div>
   {% elif h[9]=='rejected' %}
     <div class="current-action rejected-action">
@@ -123,31 +127,43 @@
 </section>
 
 {% if h[9]=='pending' and ns.current %}
-  {% set can_act = (ns.current[1] == username) and has_iam_permission('requests.approve.step' ~ ns.current[0]) %}
+  {% if h[12]=='padra' %}
+    {% set can_act = (ns.current[1] == username) and (ns.current[0] == 1) and has_iam_permission('requests.approve.padra') %}
+  {% else %}
+    {% set can_act = (ns.current[1] == username) and has_iam_permission('requests.approve.step' ~ ns.current[0]) %}
+  {% endif %}
   {% if ns.current[0] == 2 and not has_iam_permission('requests.assign_specialist') %}{% set can_act = false %}{% endif %}
   {% if can_act %}
   <section class="panel action-workbench no-print">
     {% if ns.current[0] == 1 %}
       <!-- مرحله ۱: پنل مدیرعامل شرکت پادرا -->
       <div class="workbench-head">
-        <span class="step-badge">اقدام مرحله ۱ از ۳ · شرکت پادرا</span>
-        <h3>پنل بررسی و تصمیم‌گیری مدیرعامل شرکت پادرا</h3>
-        <p>در صورت تأیید جنابعالی، این درخواست به‌صورت خودکار به کارتابل <b>مدیر خرید داخلی گروه صنعتی سرکان</b> جهت تعیین کارشناس خرید و تأمین کالا محول خواهد شد.</p>
+        <span class="step-badge">{% if h[12]=='padra' %}تصمیم نهایی · شرکت پادرا{% else %}اقدام مرحله ۱ · بررسی اولیه{% endif %}</span>
+        <h3>پنل بررسی و تصمیم‌گیری {% if h[12]=='padra' %}مدیرعامل شرکت پادرا{% else %}مسئول بررسی اولیه{% endif %}</h3>
+        {% if h[12]=='padra' %}
+        <p>این درخواست فقط در کارتابل مدیرعامل پادرا بررسی می‌شود. با تأیید یا رد شما، گردش کار همین‌جا خاتمه پیدا می‌کند و به مدیر خرید یا کارشناسان سرکان ارجاع نخواهد شد.</p>
+        {% else %}
+        <p>درخواست پس از بررسی این مرحله طبق مسیر گردش کار سرکان به مرحله بعد ارجاع خواهد شد.</p>
+        {% endif %}
       </div>
       <form method="post" action="{{url_for('decide_request',request_id=h[0])}}">
         <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
         <div class="field">
           <label>هامش / دستور مدیرعامل شرکت پادرا (اختیاری)</label>
-          <textarea id="decision-comment" name="comment" rows="2" maxlength="1000" placeholder="توضیحات یا اولویت تأمین جهت اطلاع مدیر خرید داخلی گروه صنعتی سرکان..."></textarea>
+          <textarea id="decision-comment" name="comment" rows="2" maxlength="1000" placeholder="{% if h[12]=='padra' %}توضیحات تصمیم نهایی مدیرعامل پادرا (اختیاری)...{% else %}توضیحات مرحله بررسی (اختیاری)...{% endif %}"></textarea>
           <div class="quick-chips-row">
             <span class="quick-chips-label">درج سریع هامش:</span>
-            <button type="button" class="quick-chip" onclick="setDecisionComment('با توجه به ضرورت خط تولید پادرا مورد تأیید است؛ لطفاً با اولویت از طریق مدیریت خرید سرکان تأمین گردد.')">ضرورت خط تولید پادرا</button>
-            <button type="button" class="quick-chip" onclick="setDecisionComment('مطابق بودجه مصوب تولید مورد تأیید است؛ جهت تأمین به واحد خرید داخلی سرکان ارجاع شود.')">مطابق بودجه مصوب</button>
-            <button type="button" class="quick-chip" onclick="setDecisionComment('مورد تأیید است؛ لطفاً از تأمین‌کنندگان مجاز گروه صنعتی سرکان استعلام و خریداری گردد.')">تأمین از وندورهای مجاز</button>
+            {% if h[12]=='padra' %}
+            <button type="button" class="quick-chip" onclick="setDecisionComment('با توجه به ضرورت اعلام‌شده، مورد تأیید نهایی است.')">تأیید نهایی</button>
+            <button type="button" class="quick-chip" onclick="setDecisionComment('با توجه به اولویت و ضرورت اعلام‌شده، درخواست مورد تأیید است.')">تأیید با اولویت</button>
+            {% else %}
+            <button type="button" class="quick-chip" onclick="setDecisionComment('با توجه به ضرورت اعلام‌شده، مورد تأیید است.')">ضرورت درخواست</button>
+            <button type="button" class="quick-chip" onclick="setDecisionComment('مطابق بودجه مصوب مورد تأیید است.')">مطابق بودجه مصوب</button>
+            {% endif %}
           </div>
         </div>
         <div class="form-actions">
-          <button class="btn primary" name="decision" value="approved">✓ تأیید مدیرعامل پادرا و احاله به مدیر خرید داخلی سرکان</button>
+          <button class="btn primary" name="decision" value="approved">✓ {% if h[12]=='padra' %}تأیید نهایی درخواست پادرا{% else %}تأیید و ادامه گردش کار{% endif %}</button>
           <button class="btn danger" name="decision" value="rejected">× رد درخواست خرید</button>
         </div>
       </form>
