@@ -1590,7 +1590,7 @@ def decide_request(request_id):
                         """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
                            VALUES (?,N'محول‌سازی به مدیر خرید داخلی سرکان',N'SYSTEM',?)""",
                         request_id,
-                        f"درخواست پس از تأیید مدیرعامل پادرا به مرحله {next_step[0]} ({next_step[2]} - {next_step[1]}) محول شد تا کارشناس خرید تعیین گردد.",
+                        f"درخواست پس از تأیید مرحله اول گردش کار سرکان به مرحله {next_step[0]} ({next_step[2]} - {next_step[1]}) ارجاع شد تا کارشناس خرید تعیین گردد.",
                     )
         elif current_step_no == 2 and specialist_info:
             details = (
