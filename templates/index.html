@@ -165,7 +165,7 @@
     <span class="count" id="visible-rows-count">{{rows|length}} مورد</span>
   </div>
   <form class="filter-bar" method="get" action="{{url_for('index')}}">
-    <input id="quick-search-input" name="q" value="{{search_text}}" placeholder="جستجو بر اساس شماره درخواست، واحد، شرح یا نام ثبت‌کننده...">
+    <input id="quick-search-input" name="q" value="{{search_text}}" placeholder="جستجو بر اساس شماره درخواست، کد کالا، نام کالا، واحد یا ثبت‌کننده...">
     <select name="status" onchange="this.form.submit()">
       <option value="">همه وضعیت‌ها</option>
       {% if has_iam_permission('requests.approve.padra') or has_iam_permission('requests.approve.step1') or has_iam_permission('requests.approve.step2') or has_iam_permission('requests.approve.step3') %}<option value="my_turn" {% if status_filter=='my_turn' %}selected{% endif %}>کارتابل اقدام من (نوبت من)</option>{% endif %}
