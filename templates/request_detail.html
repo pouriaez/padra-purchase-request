@@ -144,6 +144,20 @@
 </section>
 {% endif %}
 
+{% if can_return_request %}
+<section class="panel reassign-box no-print">
+  <div class="reassign-head">
+    <b>بازگردانی درخواست به مرحله قبل</b>
+    <span>تا زمانی که مسئول مرحله بعد اقدامی انجام نداده باشد، می‌توانید درخواست را به «{{return_target_title}}» بازگردانید. پس از بازگردانی، امکان ادامه بازگشت به مراحل قبلی نیز وجود دارد.</span>
+  </div>
+  <form method="post" action="{{url_for('return_request',request_id=h[0])}}" class="reassign-form" onsubmit="return confirm('درخواست به مرحله قبل بازگردانده شود؟');">
+    <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+    <input name="return_reason" maxlength="500" required placeholder="علت بازگردانی درخواست را وارد کنید (الزامی)">
+    <button class="btn secondary" type="submit">↶ بازگرداندن به مرحله قبل</button>
+  </form>
+</section>
+{% endif %}
+
 {% if h[9]=='pending' and ns.current %}
   {% if h[12]=='padra' and ns.current[0] == 1 %}
     {% set can_act = (ns.current[1] == username) and has_iam_permission('requests.approve.padra') %}
