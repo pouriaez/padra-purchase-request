@@ -204,7 +204,7 @@
       {% for r in rows %}
         {% set req_user = user_info(r[7]) %}
         {% set reason_str = r[14] or '' %}
-        <tr class="request-row {% if r[5]=='pending' and r[9]==username %}row-my-turn{% endif %}">
+        <tr class="request-row {% if r[5]=='pending' and r[9]==username %}row-my-turn{% endif %}" data-search="{{r[16] or ''}}">
           <td>
             <div class="req-no-line">
               <a class="request-no" href="{{url_for('view_request',request_id=r[0])}}">{{r[1] or ('#'~r[0])}}</a>
@@ -286,7 +286,7 @@
         var q = searchInput.value.trim().toLowerCase();
         var visible = 0;
         rows.forEach(function(row) {
-          var text = row.textContent.toLowerCase();
+          var text = (row.textContent + ' ' + (row.getAttribute('data-search') || '')).toLowerCase();
           var match = !q || text.indexOf(q) !== -1;
           row.style.display = match ? '' : 'none';
           if (match) visible++;
