@@ -1285,10 +1285,17 @@ def index():
             params.append(type_filter)
 
         if search_text:
-            where += """ AND (r.request_no LIKE ? OR r.unit_name LIKE ?
-                         OR r.requester_username LIKE ? OR r.request_reason LIKE ?)"""
+            where += """ AND (
+                         r.request_no LIKE ? OR r.unit_name LIKE ?
+                         OR r.requester_username LIKE ? OR r.request_reason LIKE ?
+                         OR EXISTS (
+                             SELECT 1 FROM Project.request_items si
+                             WHERE si.request_id = r.id
+                               AND (si.item_code LIKE ? OR si.item_description LIKE ?)
+                         )
+                     )"""
             like = f"%{search_text}%"
-            params.extend([like, like, like, like])
+            params.extend([like, like, like, like, like, like])
 
         cur.execute(
             f"""SELECT TOP (100)
@@ -1766,7 +1773,43 @@ def view_request(request_id):
     )
     if not can_view:
         abort(403)
-    return render_template("request_detail.html", data=data, username=current_user.username)
+
+    current_approval = next((a for a in data["approvals"] if a[3] == "pending"), None)
+    previous_approval = None
+    can_return_request = False
+    return_target_title = ""
+    if h[12] == "padra" and h[9] == "pending" and current_approval and current_approval[0] in (2, 3):
+        previous_approval = next(
+            (a for a in data["approvals"] if a[0] == current_approval[0] - 1),
+            None,
+        )
+        downstream_not_acted = all(
+            a[3] in ("pending", "waiting")
+            for a in data["approvals"]
+            if a[0] >= current_approval[0]
+        )
+        if previous_approval and previous_approval[3] == "approved":
+            if previous_approval[0] == 1:
+                actor_allowed = (
+                    previous_approval[1] == current_user.username
+                    and has_iam_permission("requests.approve.padra")
+                )
+            else:
+                actor_allowed = (
+                    previous_approval[1] == current_user.username
+                    and has_iam_permission("requests.approve.step2")
+                    and has_iam_permission("requests.assign_specialist")
+                )
+            can_return_request = bool(actor_allowed and downstream_not_acted)
+            return_target_title = previous_approval[2]
+
+    return render_template(
+        "request_detail.html",
+        data=data,
+        username=current_user.username,
+        can_return_request=can_return_request,
+        return_target_title=return_target_title,
+    )
 
 
 @app.route("/request/<int:request_id>/decision", methods=["POST"])
@@ -1907,16 +1950,30 @@ def decide_request(request_id):
         else:
             if workflow_type == "padra" and current_step_no == 1:
                 cur.execute(
-                    """INSERT INTO Project.approvals
+                    """IF EXISTS (SELECT 1 FROM Project.approvals WHERE request_id=? AND step_no=2)
+                       UPDATE Project.approvals
+                       SET approver_username=N'm.mahdiyon',
+                           approver_title=N'مدیر خرید داخلی گروه صنعتی سرکان - محمد مهدیون',
+                           decision='waiting',comment=NULL,decided_at=NULL
+                       WHERE request_id=? AND step_no=2
+                       ELSE
+                       INSERT INTO Project.approvals
                        (request_id,step_no,approver_username,approver_title,decision)
                        VALUES (?,2,N'm.mahdiyon',N'مدیر خرید داخلی گروه صنعتی سرکان - محمد مهدیون','waiting')""",
-                    request_id,
+                    request_id, request_id, request_id,
                 )
                 cur.execute(
-                    """INSERT INTO Project.approvals
+                    """IF EXISTS (SELECT 1 FROM Project.approvals WHERE request_id=? AND step_no=3)
+                       UPDATE Project.approvals
+                       SET approver_username=N'UNASSIGNED_SPECIALIST',
+                           approver_title=N'کارشناس خرید داخلی گروه صنعتی سرکان',
+                           decision='waiting',comment=NULL,decided_at=NULL
+                       WHERE request_id=? AND step_no=3
+                       ELSE
+                       INSERT INTO Project.approvals
                        (request_id,step_no,approver_username,approver_title,decision)
                        VALUES (?,3,N'UNASSIGNED_SPECIALIST',N'کارشناس خرید داخلی گروه صنعتی سرکان','waiting')""",
-                    request_id,
+                    request_id, request_id, request_id,
                 )
             if current_step_no == 2 and specialist_info:
                 spec_title = f"کارشناس خرید داخلی گروه صنعتی سرکان - {specialist_info['full_name']}"
@@ -2130,6 +2187,121 @@ def record_delivery(request_id):
             conn.rollback()
         app.logger.exception("Delivery receipt registration failed")
         flash("ثبت رسید تحویل انجام نشد؛ ساختار جدول و اتصال دیتابیس را بررسی کنید.", "error")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return redirect(url_for("view_request", request_id=request_id))
+
+
+@app.route("/request/<int:request_id>/return", methods=["POST"])
+@login_required
+def return_request(request_id):
+    reason = request.form.get("return_reason", "").strip()
+    if not reason:
+        flash("ثبت علت بازگردانی درخواست الزامی است.", "error")
+        return redirect(url_for("view_request", request_id=request_id))
+
+    conn = cur = None
+    try:
+        conn = data_db()
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT workflow_type,status
+               FROM Project.requests WITH (UPDLOCK, ROWLOCK)
+               WHERE id=?""",
+            request_id,
+        )
+        request_row = cur.fetchone()
+        if not request_row or request_row[0] != "padra" or request_row[1] != "pending":
+            conn.rollback()
+            abort(403)
+
+        cur.execute(
+            """SELECT step_no,approver_username,approver_title,decision
+               FROM Project.approvals WITH (UPDLOCK, ROWLOCK)
+               WHERE request_id=? ORDER BY step_no""",
+            request_id,
+        )
+        approvals = cur.fetchall()
+        active = next((a for a in approvals if a[3] == "pending"), None)
+        if not active or active[0] not in (2, 3):
+            conn.rollback()
+            abort(403)
+
+        previous = next((a for a in approvals if a[0] == active[0] - 1), None)
+        downstream_not_acted = all(
+            a[3] in ("pending", "waiting")
+            for a in approvals
+            if a[0] >= active[0]
+        )
+        if not previous or previous[3] != "approved" or not downstream_not_acted:
+            conn.rollback()
+            abort(403)
+
+        if previous[0] == 1:
+            permitted = (
+                previous[1] == current_user.username
+                and has_iam_permission("requests.approve.padra")
+            )
+        else:
+            permitted = (
+                previous[1] == current_user.username
+                and has_iam_permission("requests.approve.step2")
+                and has_iam_permission("requests.assign_specialist")
+            )
+        if not permitted:
+            conn.rollback()
+            abort(403)
+
+        previous_step = previous[0]
+        cur.execute(
+            """UPDATE Project.approvals
+               SET decision='pending',comment=NULL,decided_at=NULL
+               WHERE request_id=? AND step_no=? AND decision='approved'""",
+            request_id, previous_step,
+        )
+        cur.execute(
+            """UPDATE Project.approvals
+               SET decision='waiting',comment=NULL,decided_at=NULL
+               WHERE request_id=? AND step_no>=?""",
+            request_id, active[0],
+        )
+        cur.execute(
+            """UPDATE Project.approvals
+               SET approver_username=N'UNASSIGNED_SPECIALIST',
+                   approver_title=N'کارشناس خرید داخلی گروه صنعتی سرکان'
+               WHERE request_id=? AND step_no=3""",
+            request_id,
+        )
+        cur.execute(
+            """UPDATE Project.requests
+               SET status='pending',assigned_specialist=NULL,updated_at=GETDATE()
+               WHERE id=?""",
+            request_id,
+        )
+        details = (
+            f"درخواست از مرحله {active[0]} به مرحله {previous_step} "
+            f"({previous[2]}) بازگردانده شد. علت: {reason}"
+        )
+        cur.execute(
+            """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+               VALUES (?,N'بازگردانی زنجیره‌ای درخواست به مرحله قبل',?,?)""",
+            request_id, current_user.username, details,
+        )
+        conn.commit()
+        flash(f"درخواست با موفقیت به مرحله قبل ({previous[2]}) بازگردانده شد.", "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        app.logger.exception("Purchase request return failed")
+        flash("بازگردانی درخواست انجام نشد؛ تغییری در اطلاعات ثبت نشد.", "error")
     finally:
         if cur:
             cur.close()
