@@ -1307,7 +1307,8 @@ def index():
                     COALESCE(st.total_steps,0) AS total_steps,
                     COALESCE(it.item_count,0) AS item_count,
                     COALESCE(r.request_reason,N'') AS request_reason,
-                    r.workflow_type
+                    r.workflow_type,
+                    COALESCE(search_items.item_search_text,N'') AS item_search_text
                FROM Project.requests r
                OUTER APPLY (
                    SELECT TOP (1) a.approver_username,a.approver_title,a.step_no
@@ -1323,6 +1324,15 @@ def index():
                    SELECT COUNT(*) AS item_count
                    FROM Project.request_items i WHERE i.request_id=r.id
                ) it
+               OUTER APPLY (
+                   SELECT STUFF((
+                       SELECT N' ' + COALESCE(CONVERT(NVARCHAR(200),si.item_code),N'')
+                              + N' ' + COALESCE(si.item_description,N'')
+                       FROM Project.request_items si
+                       WHERE si.request_id=r.id
+                       FOR XML PATH(''), TYPE
+                   ).value('.', 'NVARCHAR(MAX)'),1,1,N'') AS item_search_text
+               ) search_items
                WHERE {where}
                ORDER BY r.id DESC""",
             *params,
