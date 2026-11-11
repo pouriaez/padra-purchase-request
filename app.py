@@ -1010,14 +1010,19 @@ def request_visibility_clause(permissions):
         params.append(current_user.username)
     if "requests.view_assigned" in permissions:
         clauses.append(
-            """(r.workflow_type IN ('serkan','padra') AND EXISTS (
-                SELECT 1 FROM Project.approvals ax
-                WHERE ax.request_id = r.id
-                  AND ax.step_no = 3
-                  AND ax.approver_username = ?
+            """(r.workflow_type IN ('serkan','padra') AND (
+                EXISTS (
+                    SELECT 1 FROM Project.request_item_assignments ia
+                    WHERE ia.request_id=r.id AND ia.specialist_username=?
+                )
+                OR EXISTS (
+                    SELECT 1 FROM Project.approvals ax
+                    WHERE ax.request_id=r.id AND ax.step_no=3
+                      AND ax.approver_username=?
+                )
             ))"""
         )
-        params.append(current_user.username)
+        params.extend([current_user.username, current_user.username])
     if not clauses:
         abort(403)
     return "(" + " OR ".join(clauses) + ")", params
@@ -1115,6 +1120,29 @@ def get_request(request_id):
             request_id,
         )
         items = cur.fetchall()
+        is_item_specialist = (
+            has_iam_permission("requests.view_assigned")
+            and not has_iam_permission("requests.view_all")
+            and not has_iam_permission("requests.view_team")
+            and not has_iam_permission("requests.view_padra")
+        )
+        cur.execute(
+            """SELECT a.id,a.request_item_id,a.specialist_username,a.assignment_status,
+                      a.assigned_by,a.assigned_at,a.completed_by,a.completed_at,a.completion_comment,
+                      i.line_no,i.item_code,i.item_description,i.unit_name,i.quantity,
+                      i.needed_date_fa,i.usage_location
+               FROM Project.request_item_assignments a
+               INNER JOIN Project.request_items i ON i.id=a.request_item_id
+               WHERE a.request_id=?
+               ORDER BY i.line_no""",
+            request_id,
+        )
+        item_assignments = cur.fetchall()
+        if is_item_specialist:
+            item_assignments = [a for a in item_assignments if a[2] == current_user.username]
+            visible_item_ids = {a[1] for a in item_assignments}
+            items = [item for item in items if item[7] in visible_item_ids]
+        assignment_map = {a[1]: a[2] for a in item_assignments}
         cur.execute(
             """SELECT step_no,approver_username,approver_title,decision,comment,decided_at
                FROM Project.approvals WHERE request_id=? ORDER BY step_no""",
@@ -1127,6 +1155,8 @@ def get_request(request_id):
             request_id,
         )
         history = cur.fetchall()
+        if is_item_specialist:
+            history = []
         audit_log = []
         can_view_audit = (
             current_user.is_authenticated
@@ -1149,42 +1179,60 @@ def get_request(request_id):
                 audit_log = cur.fetchall()
             except Exception:
                 app.logger.warning("Request audit table is not installed yet; run sql/009_request_audit_trail.sql.")
+        item_scope = (
+            " AND o.request_item_id IN (SELECT request_item_id FROM Project.request_item_assignments WHERE request_id=? AND specialist_username=?)"
+            if is_item_specialist else ""
+        )
+        offer_params = (request_id, request_id, current_user.username) if is_item_specialist else (request_id,)
         cur.execute(
             """SELECT o.supplier_name,o.proforma_number,o.delivery_date_fa,
                       i.item_description,o.quantity,o.unit_price,o.payment_method,
                       o.created_by,o.created_at,o.id,o.is_selected,o.request_item_id
                FROM Project.request_supplier_offers o
                INNER JOIN Project.request_items i ON i.id=o.request_item_id
-               WHERE o.request_id=? ORDER BY o.id""",
-            request_id,
+               WHERE o.request_id=?""" + item_scope + " ORDER BY o.id",
+            *offer_params,
         )
         supplier_offers = cur.fetchall()
+        delivery_scope = (
+            " AND o.request_item_id IN (SELECT request_item_id FROM Project.request_item_assignments WHERE request_id=? AND specialist_username=?)"
+            if is_item_specialist else ""
+        )
+        delivery_params = (request_id, request_id, current_user.username) if is_item_specialist else (request_id,)
         cur.execute(
             """SELECT d.id,d.receipt_no,d.delivery_date_fa,d.quantity,d.recorded_by,d.recorded_at,
                       o.supplier_name,i.item_description,o.id
                FROM Project.request_deliveries d
                INNER JOIN Project.request_supplier_offers o ON o.id=d.offer_id
                INNER JOIN Project.request_items i ON i.id=o.request_item_id
-               WHERE d.request_id=? ORDER BY d.delivery_date_fa,d.id""",
-            request_id,
+               WHERE d.request_id=?""" + delivery_scope + " ORDER BY d.delivery_date_fa,d.id",
+            *delivery_params,
         )
         delivery_rows = cur.fetchall()
+        progress_scope = (
+            " AND o.request_item_id IN (SELECT request_item_id FROM Project.request_item_assignments WHERE request_id=? AND specialist_username=?)"
+            if is_item_specialist else ""
+        )
+        progress_params = (request_id, request_id, current_user.username) if is_item_specialist else (request_id,)
         cur.execute(
             """SELECT o.id,o.supplier_name,i.item_description,i.unit_name,o.delivery_date_fa,o.quantity,
                       COALESCE(SUM(d.quantity),0) AS delivered_quantity
                FROM Project.request_supplier_offers o
                INNER JOIN Project.request_items i ON i.id=o.request_item_id
                LEFT JOIN Project.request_deliveries d ON d.offer_id=o.id
-               WHERE o.request_id=? AND o.is_selected=1
+               WHERE o.request_id=? AND o.is_selected=1""" + progress_scope + """
                GROUP BY o.id,o.supplier_name,i.item_description,i.unit_name,o.delivery_date_fa,o.quantity,i.line_no
                ORDER BY i.line_no,o.id""",
-            request_id,
+            *progress_params,
         )
         delivery_progress = cur.fetchall()
         bi_stats = compute_bi_analytics(cur) if has_iam_permission("requests.assign_specialist") else None
         return {
             "header": header,
             "items": items,
+            "item_assignments": item_assignments,
+            "assignment_map": assignment_map,
+            "is_item_specialist": is_item_specialist,
             "approvals": approvals,
             "history": history,
             "audit_log": audit_log,
@@ -1287,6 +1335,7 @@ def index():
             if status_name in counts:
                 counts[status_name] = total
 
+        counts["my_turn"] = 0
         if approval_steps:
             step_placeholders = ",".join("?" for _ in approval_steps)
             cur.execute(
@@ -1298,23 +1347,40 @@ def index():
                 current_user.username,
                 *sorted(approval_steps),
             )
-            counts["my_turn"] = cur.fetchone()[0] or 0
-        else:
-            counts["my_turn"] = 0
+            counts["my_turn"] += cur.fetchone()[0] or 0
+        if "requests.view_assigned" in permissions:
+            cur.execute(
+                """SELECT COUNT(DISTINCT r.id)
+                   FROM Project.requests r
+                   INNER JOIN Project.request_item_assignments ia ON ia.request_id=r.id
+                   WHERE r.status='pending' AND ia.specialist_username=?
+                     AND ia.assignment_status='assigned'""",
+                current_user.username,
+            )
+            counts["my_turn"] += cur.fetchone()[0] or 0
         bi_stats = compute_bi_analytics(cur) if "requests.assign_specialist" in permissions else None
 
         where = visibility
         params = list(vis_params)
         if status_filter == "my_turn":
-            if not approval_steps:
+            turn_clauses = []
+            if approval_steps:
+                step_placeholders = ",".join("?" for _ in approval_steps)
+                turn_clauses.append(f"""EXISTS (
+                    SELECT 1 FROM Project.approvals am
+                    WHERE am.request_id=r.id AND am.decision='pending'
+                      AND am.approver_username=? AND am.step_no IN ({step_placeholders}))""")
+                params.append(current_user.username)
+                params.extend(sorted(approval_steps))
+            if "requests.view_assigned" in permissions:
+                turn_clauses.append("""EXISTS (
+                    SELECT 1 FROM Project.request_item_assignments iam
+                    WHERE iam.request_id=r.id AND iam.specialist_username=?
+                      AND iam.assignment_status='assigned')""")
+                params.append(current_user.username)
+            if not turn_clauses:
                 abort(403)
-            step_placeholders = ",".join("?" for _ in approval_steps)
-            where += f""" AND r.status='pending' AND EXISTS (
-                         SELECT 1 FROM Project.approvals am
-                         WHERE am.request_id=r.id AND am.decision='pending'
-                           AND am.approver_username=? AND am.step_no IN ({step_placeholders}))"""
-            params.append(current_user.username)
-            params.extend(sorted(approval_steps))
+            where += " AND r.status='pending' AND (" + " OR ".join(turn_clauses) + ")"
         elif status_filter:
             where += " AND r.status=?"
             params.append(status_filter)
@@ -1820,6 +1886,11 @@ def view_request(request_id):
         )
         or (h[12] == "padra" and current_user.username == "kharid_padra")
     )
+    can_view_item_assignment = any(
+        a[2] == current_user.username for a in data.get("item_assignments", [])
+    )
+    if not can_view and has_iam_permission("requests.view_assigned") and can_view_item_assignment:
+        can_view = True
     if not can_view:
         abort(403)
 
@@ -1905,6 +1976,8 @@ def view_request(request_id):
         can_return_to_previous=can_return_to_previous,
         return_target_title=return_target_title,
         can_resubmit_request=can_resubmit_request,
+        can_manage_item_assignments=has_iam_permission("requests.assign_specialist"),
+        can_record_delivery=(h[12] == "padra" and current_user.username == "kharid_padra") or can_view_item_assignment,
     )
 
 
@@ -1963,14 +2036,36 @@ def decide_request(request_id):
         if current_step_no == 2 and not has_iam_permission("requests.assign_specialist"):
             conn.rollback()
             abort(403)
+        if current_step_no == 3:
+            conn.rollback()
+            abort(403)
 
         specialist_info = None
+        specialist_assignments = []
         if decision == "approved" and current_step_no == 2:
-            if not selected_specialist or selected_specialist not in {s["username"] for s in get_purchase_specialists()}:
+            submitted_item_ids = request.form.getlist("item_id[]")
+            submitted_specialists = request.form.getlist("item_specialist[]")
+            valid_items = {}
+            cur.execute("SELECT id,line_no,item_description FROM Project.request_items WHERE request_id=?", request_id)
+            for item_row in cur.fetchall():
+                valid_items[str(item_row[0])] = item_row
+            allowed_specialists = {sp["username"]: sp for sp in get_purchase_specialists()}
+            if not valid_items or len(submitted_item_ids) != len(valid_items) or len(submitted_specialists) != len(valid_items):
                 conn.rollback()
-                flash("لطفاً کارشناس خرید موردنظر خود را جهت محول‌سازی سفارش انتخاب نمایید.", "error")
+                flash("برای تمام اقلام درخواست باید کارشناس خرید تعیین شود.", "error")
                 return redirect(url_for("view_request", request_id=request_id))
-            specialist_info = next(s for s in get_purchase_specialists() if s["username"] == selected_specialist)
+            seen_items = set()
+            for item_id, specialist_username in zip(submitted_item_ids, submitted_specialists):
+                if item_id not in valid_items or item_id in seen_items or specialist_username not in allowed_specialists:
+                    conn.rollback()
+                    flash("تخصیص یکی از اقلام معتبر نیست. صفحه را تازه‌سازی و دوباره تلاش کنید.", "error")
+                    return redirect(url_for("view_request", request_id=request_id))
+                seen_items.add(item_id)
+                specialist_assignments.append((int(item_id), specialist_username, allowed_specialists[specialist_username]))
+            if seen_items != set(valid_items):
+                conn.rollback()
+                flash("تخصیص همه اقلام الزامی است.", "error")
+                return redirect(url_for("view_request", request_id=request_id))
 
         full_comment = comment
         supplier_rows = []
@@ -2071,21 +2166,34 @@ def decide_request(request_id):
                        VALUES (?,3,N'UNASSIGNED_SPECIALIST',N'کارشناس خرید داخلی گروه صنعتی سرکان','waiting')""",
                     request_id, request_id, request_id,
                 )
-            if current_step_no == 2 and specialist_info:
-                spec_title = f"کارشناس خرید داخلی گروه صنعتی سرکان - {specialist_info['full_name']}"
+            if current_step_no == 2 and specialist_assignments:
+                for item_id, specialist_username, specialist in specialist_assignments:
+                    cur.execute(
+                        """IF EXISTS (SELECT 1 FROM Project.request_item_assignments WHERE request_item_id=?)
+                           UPDATE Project.request_item_assignments
+                           SET specialist_username=?,assignment_status='assigned',
+                               assigned_by=?,assigned_at=SYSUTCDATETIME(),
+                               completed_by=NULL,completed_at=NULL,completion_comment=NULL
+                           WHERE request_item_id=?
+                           ELSE
+                           INSERT Project.request_item_assignments
+                               (request_id,request_item_id,specialist_username,assignment_status,assigned_by)
+                           VALUES (?,?,?,'assigned',?)""",
+                        item_id, specialist_username, current_user.username, item_id,
+                        request_id, item_id, specialist_username, current_user.username,
+                    )
                 cur.execute(
                     """UPDATE Project.approvals
-                       SET approver_username=?, approver_title=?
+                       SET approver_username=N'UNASSIGNED_SPECIALIST',
+                           approver_title=N'کارشناسان خرید داخلی گروه صنعتی سرکان',
+                           decision='waiting',comment=NULL,decided_at=NULL
                        WHERE request_id=? AND step_no=3""",
-                    specialist_info["username"],
-                    spec_title,
                     request_id,
                 )
                 cur.execute(
                     """UPDATE Project.requests
-                       SET assigned_specialist=?, updated_at=GETDATE()
+                       SET assigned_specialist=NULL, updated_at=GETDATE()
                        WHERE id=? AND workflow_type IN ('serkan','padra')""",
-                    specialist_info["username"],
                     request_id,
                 )
 
@@ -2156,19 +2264,18 @@ def decide_request(request_id):
                         request_id,
                         f"درخواست پس از تأیید مرحله اول گردش کار سرکان به مرحله {next_step[0]} ({next_step[2]} - {next_step[1]}) ارجاع شد تا کارشناس خرید تعیین گردد.",
                     )
-        elif current_step_no == 2 and specialist_info:
-            details = (
-                f"تأیید توسط مدیر خرید داخلی گروه صنعتی سرکان و محول‌سازی به "
-                f"{specialist_info['full_name']} ({specialist_info['role_title']})"
+        elif current_step_no == 2 and specialist_assignments:
+            assigned_summary = "؛ ".join(
+                f"قلم {valid_items[str(item_id)][1]}: {specialist['full_name']}"
+                for item_id, _username, specialist in specialist_assignments
             )
+            details = "تخصیص اقلام درخواست به کارشناسان خرید سرکان: " + assigned_summary
             if full_comment:
                 details += f" — دستور خرید: {full_comment}"
             cur.execute(
                 """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-                   VALUES (?,N'تخصیص و محول‌سازی به کارشناس خرید',?,?)""",
-                request_id,
-                current_user.username,
-                details,
+                   VALUES (?,N'تخصیص اقلام به کارشناسان خرید',?,?)""",
+                request_id, current_user.username, details,
             )
         else:
             details = f"انجام سفارش‌گذاری و تکمیل مرحله {current_step_no} توسط {step_approver_title}"
@@ -2192,8 +2299,8 @@ def decide_request(request_id):
             flash("تأیید مدیرعامل پادرا ثبت شد و درخواست به کارتابل مدیر خرید داخلی سرکان ارجاع گردید.", "success")
         elif decision == "approved" and current_step_no == 1:
             flash("تأیید مدیرعامل شرکت پادرا ثبت شد و درخواست به کارتابل مدیر خرید داخلی گروه صنعتی سرکان محول گردید.", "success")
-        elif decision == "approved" and current_step_no == 2 and specialist_info:
-            flash(f"درخواست با موفقیت تأیید و به کارتابل «{specialist_info['full_name']} ({specialist_info['role_title']})» محول شد.", "success")
+        elif decision == "approved" and current_step_no == 2 and specialist_assignments:
+            flash(f"درخواست تأیید شد و {len(specialist_assignments)} قلم کالا بین کارشناسان خرید تخصیص یافت.", "success")
         elif decision == "approved":
             flash("انجام سفارش‌گذاری و تکمیل نهایی خرید با موفقیت ثبت شد.", "success")
         else:
@@ -2239,13 +2346,14 @@ def record_delivery(request_id):
         conn.autocommit = False
         cur = conn.cursor()
         cur.execute(
-            """SELECT r.workflow_type,r.assigned_specialist,r.status,o.supplier_name,
+            """SELECT r.workflow_type,ia.specialist_username,r.status,o.supplier_name,
                       o.quantity,COALESCE(SUM(d.quantity),0)
                FROM Project.requests r
                INNER JOIN Project.request_supplier_offers o ON o.request_id=r.id AND o.id=?
+               INNER JOIN Project.request_item_assignments ia ON ia.request_item_id=o.request_item_id
                LEFT JOIN Project.request_deliveries d ON d.offer_id=o.id
                WHERE r.id=? AND o.is_selected=1
-               GROUP BY r.workflow_type,r.assigned_specialist,r.status,o.supplier_name,o.quantity""",
+               GROUP BY r.workflow_type,ia.specialist_username,r.status,o.supplier_name,o.quantity""",
             offer_id, request_id,
         )
         offer = cur.fetchone()
@@ -2749,18 +2857,15 @@ def reassign_specialist(request_id):
             conn.rollback()
             abort(403)
         cur.execute(
-            """UPDATE Project.approvals
-               SET approver_username=?, approver_title=?
-               WHERE request_id=? AND step_no=3 AND decision='pending'""",
-            spec_info["username"],
-            spec_title,
-            request_id,
+            """UPDATE Project.request_item_assignments
+               SET specialist_username=?,assigned_by=?,assigned_at=SYSUTCDATETIME()
+               WHERE request_id=? AND assignment_status='assigned'""",
+            spec_info["username"], current_user.username, request_id,
         )
         cur.execute(
             """UPDATE Project.requests
-               SET assigned_specialist=?, updated_at=GETDATE()
-               WHERE id=? AND workflow_type='serkan'""",
-            spec_info["username"],
+               SET assigned_specialist=NULL, updated_at=GETDATE()
+               WHERE id=? AND workflow_type IN ('serkan','padra')""",
             request_id,
         )
         details = f"تغییر کارشناس مسئول خرید توسط مدیر خرید داخلی سرکان به: {spec_info['full_name']} ({spec_info['role_title']})"
