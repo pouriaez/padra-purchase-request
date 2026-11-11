@@ -50,7 +50,7 @@ BEGIN
         CASE WHEN d.id IS NULL THEN 'INSERT' WHEN i.id IS NULL THEN 'DELETE' ELSE 'UPDATE' END,
         N'requests',
         CONVERT(NVARCHAR(128),COALESCE(i.id,d.id)),
-        NULL,
+        (SELECT TOP (1) a.step_no FROM Project.approvals a WHERE a.request_id=COALESCE(i.id,d.id) AND a.decision='pending' ORDER BY a.step_no),
         CASE WHEN d.id IS NOT NULL THEN (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) END,
         CASE WHEN i.id IS NOT NULL THEN (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) END
     FROM inserted i
@@ -75,7 +75,7 @@ BEGIN
         CASE WHEN d.id IS NULL THEN 'INSERT' WHEN i.id IS NULL THEN 'DELETE' ELSE 'UPDATE' END,
         N'request_items',
         CONVERT(NVARCHAR(128),COALESCE(i.id,d.id)),
-        NULL,
+        (SELECT TOP (1) a.step_no FROM Project.approvals a WHERE a.request_id=COALESCE(i.request_id,d.request_id) AND a.decision='pending' ORDER BY a.step_no),
         CASE WHEN d.id IS NOT NULL THEN (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) END,
         CASE WHEN i.id IS NOT NULL THEN (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) END
     FROM inserted i
@@ -125,7 +125,7 @@ BEGIN
         CASE WHEN d.id IS NULL THEN 'INSERT' WHEN i.id IS NULL THEN 'DELETE' ELSE 'UPDATE' END,
         N'request_supplier_offers',
         CONVERT(NVARCHAR(128),COALESCE(i.id,d.id)),
-        NULL,
+        (SELECT TOP (1) a.step_no FROM Project.approvals a WHERE a.request_id=COALESCE(i.request_id,d.request_id) AND a.decision='pending' ORDER BY a.step_no),
         CASE WHEN d.id IS NOT NULL THEN (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) END,
         CASE WHEN i.id IS NOT NULL THEN (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) END
     FROM inserted i
@@ -150,7 +150,7 @@ BEGIN
         CASE WHEN d.id IS NULL THEN 'INSERT' WHEN i.id IS NULL THEN 'DELETE' ELSE 'UPDATE' END,
         N'request_deliveries',
         CONVERT(NVARCHAR(128),COALESCE(i.id,d.id)),
-        NULL,
+        (SELECT TOP (1) a.step_no FROM Project.approvals a WHERE a.request_id=COALESCE(i.request_id,d.request_id) AND a.decision='pending' ORDER BY a.step_no),
         CASE WHEN d.id IS NOT NULL THEN (SELECT d.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) END,
         CASE WHEN i.id IS NOT NULL THEN (SELECT i.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) END
     FROM inserted i
