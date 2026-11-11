@@ -193,6 +193,7 @@
     {% set can_act = (ns.current[1] == username) and has_iam_permission('requests.approve.step' ~ ns.current[0]) %}
   {% endif %}
   {% if ns.current[0] == 2 and not has_iam_permission('requests.assign_specialist') %}{% set can_act = false %}{% endif %}
+  {% if ns.current[0] == 3 %}{% set can_act = false %}{% endif %}
   {% if can_act %}
   <section class="panel action-workbench no-print">
     {% if ns.current[0] == 1 %}
@@ -237,30 +238,35 @@
       </div>
       <form method="post" action="{{url_for('decide_request',request_id=h[0])}}">
         <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
-        <div class="specialist-picker-label">انتخاب کارشناس خرید گروه صنعتی سرکان جهت محول‌سازی سفارش *</div>
-        <div class="specialist-cards">
-          {% set ns_rec = namespace(picked=False) %}
-          {% for sp in purchase_specialists %}
-            {% set is_rec = (sp.recommended_for == h[3]) or (h[3] == 'other' and sp.recommended_for == 'service') %}
-            {% set wl = data.bi_stats.specialist_workloads.get(sp.username, {'active': 0, 'completed': 0}) if data.bi_stats else {'active': 0, 'completed': 0} %}
-            <label class="specialist-card {% if is_rec %}recommended-sp{% endif %}">
-              <input type="radio" name="assigned_specialist" value="{{sp.username}}" {% if is_rec and not ns_rec.picked %}{% set ns_rec.picked = True %}checked{% elif loop.first and not is_rec and not ns_rec.picked %}checked{% endif %} required>
-              <div class="sp-card-body">
-                <div class="sp-top">
-                  <b>{{sp.full_name}}</b>
-                  <span class="sp-code">{{sp.username}}</span>
-                </div>
-                <span class="sp-role">{{sp.role_title}}</span>
-                <div class="sp-workload-row">
-                  <span class="wl-badge">پرونده فعال: <b>{{wl.active}}</b></span>
-                  <span class="wl-badge done">تکمیل‌شده: <b>{{wl.completed}}</b></span>
-                  {% if is_rec %}
-                    <span class="rec-badge">★ پیشنهاد هوشمند BI</span>
-                  {% endif %}
-                </div>
-              </div>
-            </label>
-          {% endfor %}
+        <div class="field full-field">
+          <label for="bulk-specialist">تخصیص سریع همه اقلام به یک کارشناس</label>
+          <select id="bulk-specialist">
+            {% for sp in purchase_specialists %}
+              <option value="{{sp.username}}">{{sp.full_name}} — {{sp.role_title}}</option>
+            {% endfor %}
+          </select>
+          <small>اگر همه کالاها باید به یک نفر ارجاع شوند، اینجا انتخاب کنید. برای تقسیم کار، مسئول هر ردیف را جداگانه تغییر دهید.</small>
+        </div>
+        <div class="specialist-picker-label">تعیین کارشناس مستقل برای هر قلم کالا *</div>
+        <div class="table-wrap">
+          <table class="items-table">
+            <thead><tr><th>ردیف</th><th>کد کالا</th><th>شرح کالا</th><th>مقدار</th><th>کارشناس مسئول</th></tr></thead>
+            <tbody>
+              {% for x in data.items %}
+              <tr>
+                <td>{{x[0]}}</td><td>{{x[1] or '—'}}</td><td>{{x[2]}}</td><td>{{x[4]}}</td>
+                <td>
+                  <input type="hidden" name="item_id[]" value="{{x[7]}}">
+                  <select name="item_specialist[]" class="item-specialist-select" required>
+                    {% for sp in purchase_specialists %}
+                      <option value="{{sp.username}}" {% if sp.username == data.assignment_map.get(x[7]) or (not data.assignment_map.get(x[7]) and loop.first) %}selected{% endif %}>{{sp.full_name}} — {{sp.username}}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
         <div class="field full-field">
           <label>دستور خرید و نکات ارجاع مدیر خرید داخلی سرکان به کارشناس منتخب</label>
@@ -346,7 +352,55 @@
   {% endif %}
 {% endif %}
 
-{% set can_record_delivery = (h[12]=='padra' and username=='kharid_padra') or (h[13] and username==h[13]) %}
+{% if data.is_item_specialist and h[9]=='pending' %}
+<section class="panel action-workbench no-print">
+  <div class="workbench-head">
+    <span class="step-badge specialist">کارتابل اختصاصی اقلام شما · خرید سرکان</span>
+    <h3>اقدام روی کالاهای ارجاع‌شده به شما</h3>
+    <p>فقط اطلاعات اقلامی در این بخش نمایش داده می‌شود که مسئولیت خرید آن‌ها به شما واگذار شده است. تکمیل هر قلم مستقل است و پرونده اصلی پس از تکمیل همه اقلام بسته می‌شود.</p>
+  </div>
+  {% for a in data.item_assignments %}
+    {% if a[3]=='assigned' and a[2]==username %}
+    <div class="item-assignment-work">
+      <h4>قلم {{a[9]}} · {{a[11]}}</h4>
+      <p>کد کالا: {{a[10] or '—'}} · مقدار درخواستی: {{a[13]}} {{a[12]}} · تاریخ نیاز: {{a[14]}}</p>
+      <form method="post" action="{{url_for('complete_assigned_item',request_id=h[0],item_id=a[1])}}">
+        <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+        <div class="table-wrap">
+          <table class="items-table supplier-offers-table">
+            <thead><tr><th>نام تأمین‌کننده</th><th>انتخاب نهایی</th><th>شماره پیش‌فاکتور</th><th>تاریخ تحویل (شمسی)</th><th>تعداد</th><th>فی واحد</th><th>نحوه پرداخت</th><th class="no-print">حذف</th></tr></thead>
+            <tbody id="supplier-offers-body-{{a[1]}}">
+              <tr class="supplier-offer-row">
+                <td><input name="supplier_name[]" required placeholder="نام تأمین‌کننده"></td>
+                <td><select name="supplier_selected[]"><option value="0">خیر</option><option value="1" selected>بله، منتخب</option></select></td>
+                <td><input name="proforma_number[]" required placeholder="شماره پیش‌فاکتور"></td>
+                <td><input name="delivery_date[]" required placeholder="۱۴۰۵/۰۹/۱۵"></td>
+                <td><input name="supplier_quantity[]" required type="number" min="0.001" step="0.001" placeholder="تعداد"></td>
+                <td><input name="supplier_unit_price[]" required type="number" min="0.01" step="0.01" placeholder="مبلغ واحد"></td>
+                <td><input name="payment_method[]" required placeholder="مثلاً ۵۰٪ نقد، ۵۰٪ پس از تحویل"></td>
+                <td class="no-print"><button type="button" class="remove-row remove-supplier-row">×</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn secondary small" data-add-offer="supplier-offers-body-{{a[1]}}">＋ افزودن استعلام دیگر برای همین کالا</button>
+        </div>
+        <div class="field full-field">
+          <label>گزارش اقدام و توضیحات این قلم</label>
+          <textarea name="comment" rows="2" maxlength="1000" placeholder="توضیحات خرید و هماهنگی تحویل..."></textarea>
+        </div>
+        <button class="btn primary" type="submit">ثبت خرید و تکمیل این قلم</button>
+      </form>
+    </div>
+    {% elif a[3]=='completed' and a[2]==username %}
+    <div class="item-assignment-done">✓ قلم {{a[9]}} · {{a[11]}} — خرید تکمیل شده است.</div>
+    {% endif %}
+  {% endfor %}
+</section>
+{% endif %}
+
+{% set can_record_delivery = can_record_delivery %}
 {% if data.delivery_progress %}
 <section class="panel delivery-monitor-panel no-print">
   <div class="panel-head">
@@ -658,20 +712,33 @@
     }
   }
   (function() {
-    var offersBody = document.getElementById('supplier-offers-body');
-    var addOffer = document.getElementById('add-supplier-row');
-    if (!offersBody || !addOffer) return;
-    addOffer.addEventListener('click', function() {
-      var row = offersBody.querySelector('.supplier-offer-row').cloneNode(true);
-      row.querySelectorAll('input').forEach(function(input) { input.value = ''; });
-      row.querySelectorAll('select').forEach(function(select) { select.selectedIndex = 0; });
-      offersBody.appendChild(row);
+    document.querySelectorAll('[data-add-offer]').forEach(function(button) {
+      button.addEventListener('click', function() {
+        var body = document.getElementById(button.getAttribute('data-add-offer'));
+        if (!body) return;
+        var source = body.querySelector('.supplier-offer-row');
+        if (!source) return;
+        var row = source.cloneNode(true);
+        row.querySelectorAll('input').forEach(function(input) { input.value = ''; });
+        row.querySelectorAll('select').forEach(function(select) { select.selectedIndex = 0; });
+        body.appendChild(row);
+      });
     });
-    offersBody.addEventListener('click', function(event) {
-      if (event.target.classList.contains('remove-supplier-row') && offersBody.querySelectorAll('.supplier-offer-row').length > 1) {
-        event.target.closest('tr').remove();
-      }
+    document.querySelectorAll('tbody[id^="supplier-offers-body-"]').forEach(function(body) {
+      body.addEventListener('click', function(event) {
+        if (event.target.classList.contains('remove-supplier-row') && body.querySelectorAll('.supplier-offer-row').length > 1) {
+          event.target.closest('tr').remove();
+        }
+      });
     });
+    var bulk = document.getElementById('bulk-specialist');
+    if (bulk) {
+      bulk.addEventListener('change', function() {
+        document.querySelectorAll('.item-specialist-select').forEach(function(select) {
+          select.value = bulk.value;
+        });
+      });
+    }
   })();
 </script>
 {% endblock %}
