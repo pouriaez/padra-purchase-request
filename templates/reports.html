@@ -69,6 +69,31 @@
 
 <section class="panel">
   <div class="panel-head">
+    <div><h2>خلاصه آماری کالاها</h2><p>تعداد ردیف‌های درخواست هر کالا، تعداد درخواست‌های مستقل و جمع مقدار درخواستی، سفارش قطعی و تحویل‌شده؛ با تمام فیلترهای بالا.</p></div>
+    <span class="count">{{product_summary|length}} نوع کالا</span>
+  </div>
+  {% if product_summary %}
+  <div class="table-wrap">
+    <table class="items-table">
+      <thead><tr><th>کد کالا</th><th>شرح کالا</th><th>واحد</th><th>تعداد دفعات درخواست</th><th>تعداد درخواست مستقل</th><th>جمع مقدار درخواستی</th><th>جمع سفارش قطعی</th><th>جمع تحویل</th></tr></thead>
+      <tbody>
+      {% for p in product_summary %}
+        <tr>
+          <td>{{p[0] or '—'}}</td><td><b>{{p[1]}}</b></td><td>{{p[2]}}</td>
+          <td>{{p[3]}}</td><td>{{p[4]}}</td><td>{{p[5]|round(3)}}</td>
+          <td>{{p[6]|round(3)}}</td><td>{{p[7]|round(3)}}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-inline">با فیلترهای انتخاب‌شده کالایی پیدا نشد.</div>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
     <div><h2>گزارش تفصیلی اقلام</h2><p>مقادیر سفارش و تحویل در سطح هر قلم تجمیع شده‌اند تا با چند پیش‌فاکتور یا چند رسید، تعداد ردیف‌های کالا تکراری نشود.</p></div>
   </div>
   {% if rows %}
