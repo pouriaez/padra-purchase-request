@@ -17,15 +17,17 @@
 2. فایل `sql/create_purchase_request_schema.sql` را در دیتابیس `bi` اجرا کنید.
 3. فایل `sql/002_align_approval_users_with_iam.sql` را اجرا کنید تا ارجاع مرحله اول به `admin` و مرحله دوم به `m.mahdiyon` مطابق تخصیص نقش‌های IAM باشد.
 4. پس از اجرای اسکریپت ایجاد ساختار تأمین‌کنندگان `sql/007_supplier_offers_and_padra_cancellation.sql`، فایل `sql/008_supplier_selection_and_delivery_tracking.sql` را اجرا کنید تا انتخاب تأمین‌کننده و ثبت چندمرحله‌ای رسیدهای تحویل فعال شود.
-5. در همان دیتابیس، اسکریپت‌های IAM مخزن `serkan-iam` را به ترتیب `sql/001_create_iam_schema.sql`، `sql/002_seed_padra_purchase_permissions.sql` و `sql/003_padra_rbac_enforcement.sql` اجرا کنید.
-6. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
+5. فایل `sql/009_request_audit_trail.sql` را اجرا کنید تا ثبت ممیزی تغییرات و مقادیر قبل/بعد فعال شود.
+6. فایل `sql/010_item_level_specialist_assignment.sql` را اجرا کنید تا تخصیص مستقل هر قلم کالا به کارشناس خرید فعال شود. این مهاجرت، تخصیص‌های مرحله سوم موجود را برای درخواست‌های در جریان و تکمیل‌شده به سطح اقلام منتقل می‌کند و داده‌های درخواست را حذف یا بازنویسی نمی‌کند.
+7. در همان دیتابیس، اسکریپت‌های IAM مخزن `serkan-iam` را به ترتیب `sql/001_create_iam_schema.sql`، `sql/002_seed_padra_purchase_permissions.sql` و `sql/003_padra_rbac_enforcement.sql` اجرا کنید.
+8. یک محیط مجازی بسازید و وابستگی‌ها را نصب کنید:
    `python -m venv .venv`
    `.venv\\Scripts\\activate`
    `pip install -r requirements-windows.txt`
-7. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
-8. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
-9. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).
-10. آدرس برنامه: `http://SERVER:3942`
+9. از `.env.example` یک فایل `.env` بسازید و تنظیمات دیتابیس و `FLASK_SECRET_KEY` را تکمیل کنید. برنامه فایل `.env` را در صورت نصب python-dotenv می‌خواند.
+10. اجرای استاندارد ویندوز: فایل `run.bat` را اجرا کنید. اجرای دستی: `python -m waitress --listen=0.0.0.0:3942 --threads=8 app:app`
+11. بررسی سلامت سرویس: `http://SERVER:3942/healthz` (باید JSON با status=ok برگرداند).
+12. آدرس برنامه: `http://SERVER:3942`
 
 ## مجوزهای SQL
 - دیتابیس احراز هویت و IAM (`AUTH_DB_NAME=bi`): دسترسی SELECT به `[Project].[loginusers]` و جداول `[Project].[IAM_Projects]`، `[Project].[IAM_Roles]`، `[Project].[IAM_UserRoles]`، `[Project].[IAM_Permissions]` و `[Project].[IAM_RolePermissions]`.
@@ -55,3 +57,12 @@ VALUES ('goods', 1, N'username1', N'مدیر واحد', 1),
 - دسترسی‌های `requests.create`، `requests.view_own`، `requests.view_assigned`، `requests.view_all`، `requests.approve.step1` تا `requests.approve.step3`، `requests.assign_specialist`، `requests.reassign_specialist` و `requests.export` در سمت سرور کنترل می‌شوند.
 - دامنه مشاهده رکوردها نیز با شرط SQL بر اساس مجوزهای `view_own`، `view_assigned` و `view_all` محدود می‌شود.
 - در صورت عدم دسترسی به IAM یا خطا در خواندن مجوزها، برنامه دسترسی را رد می‌کند. تغییر نقش و مجوز در IAM بدون تغییر کد این برنامه اعمال می‌شود.
+
+
+## گزارش‌گیری جامع و تخصیص در سطح کالا
+
+- مدیران دارای مجوزهای `requests.view_all` و `requests.export` از داشبورد به «گزارش جامع کالاها و خرید» دسترسی دارند.
+- گزارش شامل فیلترهای ترکیبی کالا و کد کالا، نوع و وضعیت درخواست، کارشناس خرید، وضعیت تخصیص، واحد، ثبت‌کننده، تأمین‌کننده و بازه تاریخ شمسی است.
+- خلاصه کالاها، تعداد دفعات درج کالا در درخواست‌ها، تعداد درخواست‌های مستقل و جمع مقدار درخواستی، سفارش قطعی و تحویل‌شده را نمایش می‌دهد؛ خروجی CSV تفصیلی نیز در دسترس است.
+- در مرحله ارجاع مدیر خرید سرکان، هر قلم به‌صورت مستقل به یک کارشناس تخصیص داده می‌شود یا می‌توان همه اقلام را با انتخاب یک کارشناس یکجا به او سپرد.
+- هر کارشناس فقط اقلام ارجاع‌شده به خودش و اطلاعات خرید همان اقلام را می‌بیند و تکمیل هر قلم مستقل است. درخواست اصلی تا تعیین‌تکلیف همه اقلام باز می‌ماند.
