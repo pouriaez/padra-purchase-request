@@ -240,6 +240,10 @@
                   {% if r[15]=='padra' %}مرحله ۱ از {{r[12]}} · بررسی مدیرعامل پادرا{% else %}مرحله ۱ از {{r[12]}} · بررسی اولیه سرکان{% endif %}
                 {% elif r[11]==2 %}
                   مرحله ۲ از {{r[12]}} · منتظر تعیین کارشناس توسط مدیر خرید داخلی سرکان
+                {% elif r[11]==3 and r[9]=='UNASSIGNED_SPECIALIST' %}
+                  مرحله ۳ از {{r[12]}} · رسیدگی مستقل اقلام توسط کارشناسان خرید سرکان
+                {% elif r[11]==3 and has_iam_permission('requests.view_assigned') and not has_iam_permission('requests.assign_specialist') %}
+                  مرحله ۳ از {{r[12]}} · اقلام ارجاع‌شده به شما
                 {% else %}
                   مرحله {{r[11]}} از {{r[12]}} · در دست اقدام {{user_info(r[9]).full_name}} ({{r[9]}})
                 {% endif %}
