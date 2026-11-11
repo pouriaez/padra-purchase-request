@@ -4,6 +4,18 @@ GO
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
+IF OBJECT_ID(N'Project.requests', N'U') IS NULL
+    THROW 51301, 'Project.requests is missing. Install the purchase-request schema first.', 1;
+IF OBJECT_ID(N'Project.request_items', N'U') IS NULL
+    THROW 51302, 'Project.request_items is missing. Install the purchase-request schema first.', 1;
+IF OBJECT_ID(N'Project.approvals', N'U') IS NULL
+    THROW 51303, 'Project.approvals is missing. Install the purchase-request schema first.', 1;
+IF OBJECT_ID(N'Project.request_supplier_offers', N'U') IS NULL
+    THROW 51304, 'Project.request_supplier_offers is missing. Run supplier-offer migrations 007 and 008 first.', 1;
+IF OBJECT_ID(N'Project.request_deliveries', N'U') IS NULL
+    THROW 51305, 'Project.request_deliveries is missing. Run migration 008 first.', 1;
+GO
+
 IF OBJECT_ID(N'Project.request_audit_log', N'U') IS NULL
 BEGIN
     CREATE TABLE Project.request_audit_log
