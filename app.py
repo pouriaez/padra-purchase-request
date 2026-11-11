@@ -1707,6 +1707,32 @@ def reports():
         conn.close()
 
 
+@app.route("/reports/products.csv")
+@login_required
+def export_product_summary():
+    if not has_iam_permission("requests.export") or not has_iam_permission("requests.view_all"):
+        abort(403)
+    conn = data_db()
+    try:
+        cur = conn.cursor()
+        rows, _filters = _load_item_report(cur, request.args, summary_mode="products")
+        buf = io.StringIO()
+        buf.write("\\ufeff")
+        writer = csv.writer(buf)
+        writer.writerow([
+            "کد کالا","شرح کالا","واحد","تعداد دفعات درخواست",
+            "تعداد درخواست مستقل","جمع مقدار درخواستی","جمع سفارش قطعی","جمع تحویل‌شده"
+        ])
+        for row in rows:
+            writer.writerow(row)
+        return Response(
+            buf.getvalue(), mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition":"attachment; filename=padra_product_summary.csv"},
+        )
+    finally:
+        conn.close()
+
+
 @app.route("/reports/items.csv")
 @login_required
 def export_item_report():
