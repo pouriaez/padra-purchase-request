@@ -56,6 +56,10 @@
       <option value="rejected" {% if filters.assignment_status=='rejected' %}selected{% endif %}>رد شده</option>
       <option value="unassigned" {% if filters.assignment_status=='unassigned' %}selected{% endif %}>بدون تخصیص</option>
     </select>
+    <input name="item_code" value="{{filters.item_code}}" placeholder="کد کالا">
+    <input name="unit" value="{{filters.unit}}" placeholder="واحد درخواست‌کننده">
+    <input name="requester" value="{{filters.requester}}" placeholder="نام کاربری ثبت‌کننده">
+    <input name="supplier" value="{{filters.supplier}}" placeholder="نام تأمین‌کننده">
     <input name="from_date" value="{{filters.from_date}}" placeholder="از تاریخ شمسی: ۱۴۰۵/۰۱/۰۱">
     <input name="to_date" value="{{filters.to_date}}" placeholder="تا تاریخ شمسی: ۱۴۰۵/۱۲/۲۹">
     <button class="btn primary" type="submit">اعمال فیلترها</button>
