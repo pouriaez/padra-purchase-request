@@ -49,7 +49,12 @@
       {% endif %}
       {% if has_iam_permission('requests.export') %}
       <a href="{{url_for('export_csv')}}" class="top-nav-link">
-        خروجی اکسل (CSV)
+        خروجی درخواست‌ها
+      </a>
+      {% endif %}
+      {% if has_iam_permission('requests.export') and has_iam_permission('requests.view_all') %}
+      <a href="{{url_for('reports')}}" class="top-nav-link {% if request.endpoint in ['reports','export_item_report'] %}active{% endif %}">
+        گزارش جامع BI
       </a>
       {% endif %}
     </nav>
