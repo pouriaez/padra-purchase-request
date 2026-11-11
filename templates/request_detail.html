@@ -390,11 +390,16 @@
           <label>گزارش اقدام و توضیحات این قلم</label>
           <textarea name="comment" rows="2" maxlength="1000" placeholder="توضیحات خرید و هماهنگی تحویل..."></textarea>
         </div>
-        <button class="btn primary" type="submit">ثبت خرید و تکمیل این قلم</button>
+        <div class="form-actions">
+          <button class="btn primary" type="submit" name="decision" value="approved">ثبت خرید و تکمیل این قلم</button>
+          <button class="btn danger" type="submit" name="decision" value="rejected" formnovalidate onclick="return confirm('عدم امکان تأمین این قلم ثبت شود؟ درج علت در توضیحات الزامی است.');">عدم امکان تأمین این قلم</button>
+        </div>
       </form>
     </div>
     {% elif a[3]=='completed' and a[2]==username %}
     <div class="item-assignment-done">✓ قلم {{a[9]}} · {{a[11]}} — خرید تکمیل شده است.</div>
+    {% elif a[3]=='rejected' and a[2]==username %}
+    <div class="item-assignment-done">× قلم {{a[9]}} · {{a[11]}} — عدم امکان تأمین ثبت شده است.</div>
     {% endif %}
   {% endfor %}
 </section>
