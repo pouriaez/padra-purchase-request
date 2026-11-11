@@ -596,6 +596,57 @@
     <div class="empty-inline">هنوز رویدادی در تاریخچه این درخواست ثبت نشده است.</div>
   {% endif %}
 </section>
+
+{% if not is_padra_purchase_user %}
+<section class="panel history-panel no-print">
+  <div class="panel-head">
+    <div>
+      <h2>گزارش ممیزی تغییرات اطلاعات (Audit Log)</h2>
+      <p>ثبت خودکار تصویر کامل اطلاعات قبل و بعد از هر درج، ویرایش یا حذف در دیتابیس</p>
+    </div>
+    <span class="count">{{data.audit_log|length}} تغییر</span>
+  </div>
+  {% if data.audit_log %}
+  <div class="table-wrap">
+    <table class="items-table">
+      <thead>
+        <tr><th>زمان</th><th>کاربر</th><th>عملیات</th><th>بخش</th><th>شناسه رکورد</th><th>مرحله</th><th>جزئیات قبل / بعد</th></tr>
+      </thead>
+      <tbody>
+        {% for item in data.audit_log %}
+        <tr>
+          <td>{{item[7]|jalali_datetime}}</td>
+          <td><b>{{item[6]}}</b></td>
+          <td>
+            {% if item[0]=='INSERT' %}ایجاد
+            {% elif item[0]=='UPDATE' %}ویرایش
+            {% elif item[0]=='DELETE' %}حذف
+            {% else %}{{item[0]}}{% endif %}
+          </td>
+          <td>{{item[1]}}</td>
+          <td>{{item[2]}}</td>
+          <td>{{item[3] if item[3] is not none else '—'}}</td>
+          <td>
+            <details>
+              <summary>مشاهده مقادیر قبل و بعد</summary>
+              {% if item[4] %}
+              <div><b>مقدار قبل</b><pre class="audit-json">{{item[4]}}</pre></div>
+              {% endif %}
+              {% if item[5] %}
+              <div><b>مقدار بعد</b><pre class="audit-json">{{item[5]}}</pre></div>
+              {% endif %}
+            </details>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-inline">برای این درخواست هنوز رویداد ممیزی ثبت نشده است. پس از اجرای Migration شماره ۹، تغییرات جدید به‌صورت خودکار ثبت می‌شوند.</div>
+  {% endif %}
+</section>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 <script>
