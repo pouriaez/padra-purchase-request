@@ -891,12 +891,10 @@ def compute_bi_analytics(cur) -> dict:
         uname = sp["username"]
         cur.execute(
             """SELECT
-                 SUM(CASE WHEN a.decision = 'pending' THEN 1 ELSE 0 END),
-                 SUM(CASE WHEN a.decision = 'approved' THEN 1 ELSE 0 END)
-               FROM Project.approvals a
-               INNER JOIN Project.requests r ON r.id = a.request_id
-               WHERE r.workflow_type IN ('serkan','padra')
-                 AND a.approver_username = ?""",
+                 SUM(CASE WHEN ia.assignment_status = 'assigned' THEN 1 ELSE 0 END),
+                 SUM(CASE WHEN ia.assignment_status = 'completed' THEN 1 ELSE 0 END)
+               FROM Project.request_item_assignments ia
+               WHERE ia.specialist_username = ?""",
             uname,
         )
         row = cur.fetchone()
