@@ -2470,7 +2470,14 @@ def decide_request(request_id):
 def complete_assigned_item(request_id, item_id):
     if not has_iam_permission("requests.view_assigned"):
         abort(403)
+    decision = request.form.get("decision", "approved").strip()
     comment = request.form.get("comment", "").strip()
+    if decision not in {"approved", "rejected"}:
+        abort(400)
+    if decision == "rejected" and not comment:
+        flash("برای اعلام عدم امکان تأمین این قلم، درج علت الزامی است.", "error")
+        return redirect(url_for("view_request", request_id=request_id))
+
     supplier_names = request.form.getlist("supplier_name[]")
     supplier_selected = request.form.getlist("supplier_selected[]")
     proforma_numbers = request.form.getlist("proforma_number[]")
@@ -2498,110 +2505,130 @@ def complete_assigned_item(request_id, item_id):
             conn.rollback()
             abort(403)
 
-        offers = []
-        try:
-            row_count = max(
-                len(supplier_names), len(supplier_selected), len(proforma_numbers),
-                len(delivery_dates), len(supplier_quantities), len(supplier_unit_prices),
-                len(payment_methods),
+        if decision == "approved":
+            offers = []
+            try:
+                row_count = max(
+                    len(supplier_names), len(supplier_selected), len(proforma_numbers),
+                    len(delivery_dates), len(supplier_quantities), len(supplier_unit_prices),
+                    len(payment_methods),
+                )
+                for idx in range(row_count):
+                    values = [
+                        supplier_names[idx] if idx < len(supplier_names) else "",
+                        supplier_selected[idx] if idx < len(supplier_selected) else "0",
+                        proforma_numbers[idx] if idx < len(proforma_numbers) else "",
+                        delivery_dates[idx] if idx < len(delivery_dates) else "",
+                        supplier_quantities[idx] if idx < len(supplier_quantities) else "",
+                        supplier_unit_prices[idx] if idx < len(supplier_unit_prices) else "",
+                        payment_methods[idx] if idx < len(payment_methods) else "",
+                    ]
+                    if not any(str(v).strip() for pos, v in enumerate(values) if pos != 1):
+                        continue
+                    supplier, selected_raw, proforma, delivery, qty_raw, price_raw, payment = [str(v).strip() for v in values]
+                    if not all([supplier, proforma, delivery, qty_raw, price_raw, payment]):
+                        raise ValueError(f"اطلاعات تأمین‌کننده در ردیف {idx + 1} کامل نیست.")
+                    delivery = validate_jalali_date(delivery, f"تاریخ تحویل ردیف {idx + 1}")
+                    qty = Decimal(normalize_digits(qty_raw).replace(",", ""))
+                    price = Decimal(normalize_digits(price_raw).replace(",", ""))
+                    if qty <= 0 or price <= 0:
+                        raise ValueError(f"تعداد و فی واحد ردیف {idx + 1} باید بیشتر از صفر باشد.")
+                    if selected_raw not in {"0", "1"}:
+                        raise ValueError(f"وضعیت انتخاب تأمین‌کننده در ردیف {idx + 1} معتبر نیست.")
+                    offers.append((supplier, selected_raw == "1", proforma, delivery, qty, price, payment))
+            except (InvalidOperation, ValueError) as exc:
+                conn.rollback()
+                flash(str(exc) if isinstance(exc, ValueError) else "تعداد یا فی واحد معتبر نیست.", "error")
+                return redirect(url_for("view_request", request_id=request_id))
+
+            if not offers:
+                conn.rollback()
+                flash("برای تکمیل این قلم، حداقل یک استعلام بها ثبت کنید.", "error")
+                return redirect(url_for("view_request", request_id=request_id))
+            if sum(1 for offer in offers if offer[1]) != 1:
+                conn.rollback()
+                flash("برای هر قلم دقیقاً یک تأمین‌کننده باید به‌عنوان گزینه منتخب مشخص شود.", "error")
+                return redirect(url_for("view_request", request_id=request_id))
+
+            for offer in offers:
+                cur.execute(
+                    """INSERT INTO Project.request_supplier_offers
+                       (request_id,request_item_id,supplier_name,proforma_number,delivery_date_fa,
+                        quantity,unit_price,payment_method,is_selected,created_by)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    request_id, item_id, offer[0], offer[2], offer[3],
+                    offer[4], offer[5], offer[6], offer[1], current_user.username,
+                )
+            summary = "؛ ".join(
+                f"{offer[0]} / پیش‌فاکتور {offer[2]} / تعداد {offer[4]} / فی {offer[5]}"
+                for offer in offers
             )
-            for idx in range(row_count):
-                values = [
-                    supplier_names[idx] if idx < len(supplier_names) else "",
-                    supplier_selected[idx] if idx < len(supplier_selected) else "0",
-                    proforma_numbers[idx] if idx < len(proforma_numbers) else "",
-                    delivery_dates[idx] if idx < len(delivery_dates) else "",
-                    supplier_quantities[idx] if idx < len(supplier_quantities) else "",
-                    supplier_unit_prices[idx] if idx < len(supplier_unit_prices) else "",
-                    payment_methods[idx] if idx < len(payment_methods) else "",
-                ]
-                if not any(str(v).strip() for pos, v in enumerate(values) if pos != 1):
-                    continue
-                supplier, selected_raw, proforma, delivery, qty_raw, price_raw, payment = [str(v).strip() for v in values]
-                if not all([supplier, proforma, delivery, qty_raw, price_raw, payment]):
-                    raise ValueError(f"اطلاعات تأمین‌کننده در ردیف {idx + 1} کامل نیست.")
-                delivery = validate_jalali_date(delivery, f"تاریخ تحویل ردیف {idx + 1}")
-                qty = Decimal(normalize_digits(qty_raw).replace(",", ""))
-                price = Decimal(normalize_digits(price_raw).replace(",", ""))
-                if qty <= 0 or price <= 0:
-                    raise ValueError(f"تعداد و فی واحد ردیف {idx + 1} باید بیشتر از صفر باشد.")
-                if selected_raw not in {"0", "1"}:
-                    raise ValueError(f"وضعیت انتخاب تأمین‌کننده در ردیف {idx + 1} معتبر نیست.")
-                offers.append((supplier, selected_raw == "1", proforma, delivery, qty, price, payment))
-        except (InvalidOperation, ValueError) as exc:
-            conn.rollback()
-            flash(str(exc) if isinstance(exc, ValueError) else "تعداد یا فی واحد معتبر نیست.", "error")
-            return redirect(url_for("view_request", request_id=request_id))
+            completion_note = (comment + " — " if comment else "") + summary
+            assignment_status = "completed"
+            history_action = "تکمیل خرید قلم کالا"
+            history_details = f"قلم «{assignment[2]}» توسط کارشناس خرید تکمیل شد. {completion_note}"
+        else:
+            completion_note = comment
+            assignment_status = "rejected"
+            history_action = "عدم امکان تأمین قلم کالا"
+            history_details = f"عدم امکان تأمین قلم «{assignment[2]}» اعلام شد. علت: {comment}"
 
-        if not offers:
-            conn.rollback()
-            flash("برای تکمیل این قلم، حداقل یک استعلام بها ثبت کنید.", "error")
-            return redirect(url_for("view_request", request_id=request_id))
-        if sum(1 for offer in offers if offer[1]) != 1:
-            conn.rollback()
-            flash("برای هر قلم دقیقاً یک تأمین‌کننده باید به‌عنوان گزینه منتخب مشخص شود.", "error")
-            return redirect(url_for("view_request", request_id=request_id))
-
-        for offer in offers:
-            cur.execute(
-                """INSERT INTO Project.request_supplier_offers
-                   (request_id,request_item_id,supplier_name,proforma_number,delivery_date_fa,
-                    quantity,unit_price,payment_method,is_selected,created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                request_id, item_id, offer[0], offer[2], offer[3],
-                offer[4], offer[5], offer[6], offer[1], current_user.username,
-            )
-
-        summary = "؛ ".join(
-            f"{offer[0]} / پیش‌فاکتور {offer[2]} / تعداد {offer[4]} / فی {offer[5]}"
-            for offer in offers
-        )
-        completion_note = (comment + " — " if comment else "") + summary
         cur.execute(
             """UPDATE Project.request_item_assignments
-               SET assignment_status='completed',completed_by=?,completed_at=SYSUTCDATETIME(),
+               SET assignment_status=?,completed_by=?,completed_at=SYSUTCDATETIME(),
                    completion_comment=?
                WHERE id=? AND assignment_status='assigned'""",
-            current_user.username, completion_note, assignment[0],
+            assignment_status, current_user.username, completion_note, assignment[0],
         )
         cur.execute(
             """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-               VALUES (?,N'تکمیل خرید قلم کالا',?,?)""",
-            request_id, current_user.username,
-            f"قلم «{assignment[2]}» توسط کارشناس خرید تکمیل شد. {completion_note}",
+               VALUES (?,?,?,?)""",
+            request_id, history_action, current_user.username, history_details,
         )
         cur.execute(
-            """SELECT COUNT(*),SUM(CASE WHEN assignment_status='completed' THEN 1 ELSE 0 END),
+            """SELECT COUNT(*),
+                      SUM(CASE WHEN assignment_status='completed' THEN 1 ELSE 0 END),
+                      SUM(CASE WHEN assignment_status='rejected' THEN 1 ELSE 0 END),
                       SUM(CASE WHEN assignment_status='assigned' THEN 1 ELSE 0 END)
                FROM Project.request_item_assignments WHERE request_id=?""",
             request_id,
         )
         totals = cur.fetchone()
-        all_items_complete = bool(totals and totals[0] and int(totals[0]) == int(totals[1] or 0))
-        if all_items_complete:
+        all_items_determined = bool(
+            totals and totals[0]
+            and int(totals[0]) == int(totals[1] or 0) + int(totals[2] or 0)
+        )
+        has_rejected_item = bool(totals and int(totals[2] or 0) > 0)
+        if all_items_determined:
+            final_status = "rejected" if has_rejected_item else "approved"
+            final_decision = "rejected" if has_rejected_item else "approved"
             cur.execute(
                 """UPDATE Project.approvals
-                   SET decision='approved',approver_username=N'ITEM_ASSIGNMENTS_COMPLETED',
-                       approver_title=N'تکمیل همه اقلام توسط کارشناسان خرید',
-                       comment=N'تمام اقلام درخواست به‌صورت مستقل تعیین‌تکلیف و تکمیل شدند.',
-                       decided_at=GETDATE()
+                   SET decision=?,approver_username=N'ITEM_ASSIGNMENTS_COMPLETED',
+                       approver_title=N'تعیین‌تکلیف همه اقلام توسط کارشناسان خرید',
+                       comment=?,decided_at=GETDATE()
                    WHERE request_id=? AND step_no=3 AND decision IN ('pending','waiting')""",
+                final_decision,
+                "تمام اقلام تعیین‌تکلیف شدند؛ حداقل یک قلم عدم امکان تأمین دارد." if has_rejected_item else "تمام اقلام درخواست تکمیل شدند.",
                 request_id,
             )
             cur.execute(
-                "UPDATE Project.requests SET status='approved',updated_at=GETDATE() WHERE id=?",
-                request_id,
+                "UPDATE Project.requests SET status=?,updated_at=GETDATE() WHERE id=?",
+                final_status, request_id,
             )
             cur.execute(
                 """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-                   VALUES (?,N'تکمیل نهایی درخواست خرید',N'SYSTEM',N'تمام اقلام درخواست توسط کارشناسان مسئول تکمیل شدند و پرونده بسته شد.')""",
+                   VALUES (?,N'تعیین‌تکلیف نهایی درخواست خرید',N'SYSTEM',?)""",
                 request_id,
+                "تمام اقلام تعیین‌تکلیف شدند؛ وضعیت نهایی درخواست: " + ("رد شده به‌دلیل عدم امکان تأمین حداقل یک قلم." if has_rejected_item else "خرید تکمیل شد."),
             )
         conn.commit()
-        if all_items_complete:
-            flash("این قلم تکمیل شد و چون تمام اقلام درخواست تعیین‌تکلیف شده‌اند، پرونده نیز تکمیل شد.", "success")
+        if all_items_determined:
+            flash("همه اقلام تعیین‌تکلیف شدند و وضعیت نهایی درخواست به‌روزرسانی شد.", "success")
+        elif decision == "rejected":
+            flash("عدم امکان تأمین این قلم ثبت شد؛ درخواست تا تعیین‌تکلیف سایر اقلام باز می‌ماند.", "warning")
         else:
-            flash("اطلاعات خرید این قلم ثبت شد. سایر کارشناسان می‌توانند اقلام ارجاع‌شده به خود را تکمیل کنند.", "success")
+            flash("خرید این قلم ثبت شد. سایر کارشناسان می‌توانند اقلام ارجاع‌شده به خود را تکمیل کنند.", "success")
     except HTTPException:
         if conn:
             conn.rollback()
@@ -2610,7 +2637,7 @@ def complete_assigned_item(request_id, item_id):
         if conn:
             conn.rollback()
         app.logger.exception("Assigned item completion failed")
-        flash("ثبت اطلاعات خرید این قلم انجام نشد.", "error")
+        flash("ثبت وضعیت خرید این قلم انجام نشد.", "error")
     finally:
         if cur:
             cur.close()
