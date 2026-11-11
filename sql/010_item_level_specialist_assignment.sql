@@ -10,6 +10,8 @@ IF OBJECT_ID(N'Project.request_items', N'U') IS NULL
     THROW 51402, 'Project.request_items is missing.', 1;
 IF OBJECT_ID(N'Project.approvals', N'U') IS NULL
     THROW 51403, 'Project.approvals is missing.', 1;
+IF OBJECT_ID(N'Project.request_audit_log', N'U') IS NULL
+    THROW 51404, 'Run sql/009_request_audit_trail.sql before this migration.', 1;
 GO
 
 IF OBJECT_ID(N'Project.request_item_assignments', N'U') IS NULL
