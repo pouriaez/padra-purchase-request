@@ -2030,7 +2030,7 @@ def new_request():
                 """INSERT INTO Project.requests
                    (request_date,request_date_fa,request_type,unit_name,supply_location,fixed_asset,
                     request_reason,requester_username,workflow_type,status)
-                   OUTPUT INSERTED.id VALUES (?,?,?,?,?,?,?,?,?,'pending')""",
+                   VALUES (?,?,?,?,?,?,?,?,?,'pending')""",
                 now.date(),
                 jalali,
                 request_type,
@@ -2041,6 +2041,7 @@ def new_request():
                 current_user.username,
                 workflow_type,
             )
+            cur.execute("SELECT CAST(SCOPE_IDENTITY() AS BIGINT)")
             request_id = cur.fetchone()[0]
             request_no = f"PR-{jalali.replace('/', '')}-{request_id:06d}"
             cur.execute("UPDATE Project.requests SET request_no=? WHERE id=?", request_no, request_id)
