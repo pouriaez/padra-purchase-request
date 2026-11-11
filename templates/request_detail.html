@@ -352,6 +352,42 @@
   {% endif %}
 {% endif %}
 
+{% if can_manage_item_assignments and data.item_assignments %}
+<section class="panel no-print">
+  <div class="panel-head">
+    <div><h2>وضعیت تخصیص و پیشرفت هر قلم</h2><p>مدیر خرید داخلی می‌تواند مسئولیت هر قلم باز را جداگانه تغییر دهد.</p></div>
+    <span class="count">{{data.item_assignments|length}} قلم</span>
+  </div>
+  <div class="table-wrap">
+    <table class="items-table">
+      <thead><tr><th>ردیف</th><th>کد کالا</th><th>شرح کالا</th><th>کارشناس مسئول</th><th>وضعیت</th><th>تغییر مسئول</th></tr></thead>
+      <tbody>
+      {% for a in data.item_assignments %}
+        <tr>
+          <td>{{a[9]}}</td><td>{{a[10] or '—'}}</td><td>{{a[11]}}</td>
+          <td>{{user_info(a[2]).full_name}}</td>
+          <td>{% if a[3]=='assigned' %}در حال اقدام{% elif a[3]=='completed' %}تکمیل‌شده{% else %}عدم امکان تأمین{% endif %}</td>
+          <td>
+            {% if h[9]=='pending' and a[3] in ['assigned','rejected'] %}
+            <form method="post" action="{{url_for('reassign_item_specialist',request_id=h[0],item_id=a[1])}}" class="reassign-form">
+              <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+              <select name="assigned_specialist" required>
+                {% for sp in purchase_specialists %}
+                  <option value="{{sp.username}}" {% if sp.username==a[2] %}selected{% endif %}>{{sp.full_name}}</option>
+                {% endfor %}
+              </select>
+              <button class="btn secondary small" type="submit">تغییر</button>
+            </form>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 {% if data.is_item_specialist and h[9]=='pending' %}
 <section class="panel action-workbench no-print">
   <div class="workbench-head">
