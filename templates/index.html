@@ -63,7 +63,7 @@
     <b>{{counts.all}}</b>
     <small>کلیه درخواست‌های ثبت‌شده و ارجاعی</small>
   </a>
-  {% if has_iam_permission('requests.approve.padra') or has_iam_permission('requests.approve.step1') or has_iam_permission('requests.approve.step2') or has_iam_permission('requests.approve.step3') %}
+  {% if has_iam_permission('requests.approve.padra') or has_iam_permission('requests.approve.step1') or has_iam_permission('requests.approve.step2') or has_iam_permission('requests.approve.step3') or has_iam_permission('requests.view_assigned') %}
   <a class="stat-card action-needed {% if status_filter=='my_turn' %}selected{% endif %}" href="{{url_for('index',status='my_turn')}}">
     <span>کارتابل اقدام من (نوبت شما)</span>
     <b>{{counts.my_turn}}</b>
