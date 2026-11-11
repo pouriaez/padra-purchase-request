@@ -597,7 +597,7 @@
   {% endif %}
 </section>
 
-{% if not is_padra_purchase_user %}
+{% if not is_padra_purchase_user and (has_iam_permission('requests.view_all') or has_iam_permission('requests.assign_specialist') or has_iam_permission('requests.view_padra')) %}
 <section class="panel history-panel no-print">
   <div class="panel-head">
     <div>
