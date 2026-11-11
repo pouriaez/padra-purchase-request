@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}گزارش جامع خرید و اقلام | پادرا{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <span class="eyebrow blue">PROCUREMENT BI · ITEM LEVEL ANALYTICS</span>
+    <h1>گزارش جامع درخواست‌ها و کالاها</h1>
+    <p>گزارش در سطح هر قلم کالا؛ همراه با اطلاعات درخواست، تخصیص کارشناس، استعلام، سفارش و تحویل</p>
+  </div>
+  <div class="head-actions">
+    <a class="btn secondary" href="{{url_for('export_item_report', **filters)}}">⬇ خروجی اکسل گزارش اقلام (CSV)</a>
+    <a class="btn secondary" href="{{url_for('index')}}">بازگشت به داشبورد</a>
+  </div>
+</section>
+
+<section class="stats-grid">
+  <div class="stat-card"><span>تعداد درخواست‌ها</span><b>{{summary.requests}}</b><small>در نتایج فیلترشده</small></div>
+  <div class="stat-card"><span>تعداد اقلام</span><b>{{summary.items}}</b><small>هر ردیف معادل یک قلم کالا</small></div>
+  <div class="stat-card"><span>مقدار درخواستی</span><b>{{summary.requested_quantity|round(3)}}</b><small>جمع مقدار اقلام</small></div>
+  <div class="stat-card"><span>مقدار سفارش</span><b>{{summary.ordered_quantity|round(3)}}</b><small>جمع پیش‌فاکتورهای ثبت‌شده</small></div>
+  <div class="stat-card"><span>مقدار تحویل</span><b>{{summary.delivered_quantity|round(3)}}</b><small>جمع رسیدهای تحویل</small></div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div><h2>فیلترهای گزارش</h2><p>فیلترها به‌صورت ترکیبی اعمال می‌شوند؛ جستجو کالا، کد، شماره درخواست، واحد، ثبت‌کننده، کارشناس و تأمین‌کننده را پوشش می‌دهد.</p></div>
+    <span class="count">{{rows|length}} ردیف</span>
+  </div>
+  <form method="get" action="{{url_for('reports')}}" class="filter-bar">
+    <input name="q" value="{{filters.q}}" placeholder="کالا، کد کالا، شماره درخواست، ثبت‌کننده، واحد یا تأمین‌کننده">
+    <select name="request_type">
+      <option value="">همه انواع درخواست</option>
+      <option value="goods" {% if filters.request_type=='goods' %}selected{% endif %}>مواد اولیه</option>
+      <option value="equipment" {% if filters.request_type=='equipment' %}selected{% endif %}>تجهیزات و قطعات</option>
+      <option value="service" {% if filters.request_type=='service' %}selected{% endif %}>خدمات فنی</option>
+      <option value="other" {% if filters.request_type=='other' %}selected{% endif %}>سایر</option>
+    </select>
+    <select name="status">
+      <option value="">همه وضعیت درخواست‌ها</option>
+      <option value="pending" {% if filters.status=='pending' %}selected{% endif %}>در جریان</option>
+      <option value="submitted" {% if filters.status=='submitted' %}selected{% endif %}>ثبت‌شده</option>
+      <option value="approved" {% if filters.status=='approved' %}selected{% endif %}>تکمیل‌شده</option>
+      <option value="rejected" {% if filters.status=='rejected' %}selected{% endif %}>رد شده</option>
+      <option value="cancelled" {% if filters.status=='cancelled' %}selected{% endif %}>لغو شده</option>
+    </select>
+    <select name="specialist">
+      <option value="">همه کارشناسان خرید</option>
+      {% for sp in specialists %}
+        <option value="{{sp.username}}" {% if filters.specialist==sp.username %}selected{% endif %}>{{sp.full_name}}</option>
+      {% endfor %}
+    </select>
+    <select name="assignment_status">
+      <option value="">همه وضعیت‌های تخصیص</option>
+      <option value="assigned" {% if filters.assignment_status=='assigned' %}selected{% endif %}>در حال اقدام</option>
+      <option value="completed" {% if filters.assignment_status=='completed' %}selected{% endif %}>تکمیل‌شده</option>
+      <option value="rejected" {% if filters.assignment_status=='rejected' %}selected{% endif %}>رد شده</option>
+      <option value="unassigned" {% if filters.assignment_status=='unassigned' %}selected{% endif %}>بدون تخصیص</option>
+    </select>
+    <input name="from_date" value="{{filters.from_date}}" placeholder="از تاریخ شمسی: ۱۴۰۵/۰۱/۰۱">
+    <input name="to_date" value="{{filters.to_date}}" placeholder="تا تاریخ شمسی: ۱۴۰۵/۱۲/۲۹">
+    <button class="btn primary" type="submit">اعمال فیلترها</button>
+    <a class="text-link" href="{{url_for('reports')}}">پاک‌کردن فیلترها</a>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <div><h2>گزارش تفصیلی اقلام</h2><p>مقادیر سفارش و تحویل در سطح هر قلم تجمیع شده‌اند تا با چند پیش‌فاکتور یا چند رسید، تعداد ردیف‌های کالا تکراری نشود.</p></div>
+  </div>
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="items-table">
+      <thead><tr>
+        <th>شماره درخواست</th><th>تاریخ</th><th>واحد</th><th>ثبت‌کننده</th>
+        <th>کد کالا</th><th>شرح کالا</th><th>مقدار درخواستی</th>
+        <th>کارشناس مسئول</th><th>وضعیت تخصیص</th><th>تعداد استعلام</th>
+        <th>مقدار سفارش</th><th>مقدار تحویل</th><th>تأمین‌کننده منتخب</th><th>پرونده</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td><b>{{r[1]}}</b></td><td>{{r[2]}}</td><td>{{r[4]}}</td>
+          <td>{{user_info(r[5]).full_name}}</td><td>{{r[9] or '—'}}</td><td>{{r[10]}}</td>
+          <td>{{r[12]}}</td><td>{{user_info(r[14]).full_name if r[14] else '—'}}</td>
+          <td>{% if r[15]=='assigned' %}در حال اقدام{% elif r[15]=='completed' %}تکمیل‌شده{% elif r[15]=='rejected' %}رد شده{% else %}بدون تخصیص{% endif %}</td>
+          <td>{{r[16]}}</td><td>{{r[17]}}</td><td>{{r[18]}}</td><td>{{r[19] or '—'}}</td>
+          <td><a class="text-link" href="{{url_for('view_request',request_id=r[0])}}">مشاهده</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty-inline">با فیلترهای انتخاب‌شده، قلمی پیدا نشد.</div>
+  {% endif %}
+  <p class="list-note">حداکثر ۵۰۰۰ ردیف در هر گزارش نمایش داده می‌شود. برای گزارش‌های بزرگ‌تر، فیلترهای تاریخ یا کالا را محدودتر کنید.</p>
+</section>
+{% endblock %}
