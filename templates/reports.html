@@ -84,8 +84,8 @@
       {% for r in rows %}
         <tr>
           <td><b>{{r[1]}}</b></td><td>{{r[2]}}</td><td>{{r[4]}}</td>
-          <td>{{user_info(r[5]).full_name}}</td><td>{{r[9] or '—'}}</td><td>{{r[10]}}</td>
-          <td>{{r[12]}}</td><td>{{user_info(r[14]).full_name if r[14] else '—'}}</td>
+          <td>{{report_user_names.get(r[5], r[5])}}</td><td>{{r[9] or '—'}}</td><td>{{r[10]}}</td>
+          <td>{{r[12]}}</td><td>{{report_user_names.get(r[14], r[14]) if r[14] else '—'}}</td>
           <td>{% if r[15]=='assigned' %}در حال اقدام{% elif r[15]=='completed' %}تکمیل‌شده{% elif r[15]=='rejected' %}رد شده{% else %}بدون تخصیص{% endif %}</td>
           <td>{{r[16]}}</td><td>{{r[17]}}</td><td>{{r[18]}}</td><td>{{r[19] or '—'}}</td>
           <td><a class="text-link" href="{{url_for('view_request',request_id=r[0])}}">مشاهده</a></td>
