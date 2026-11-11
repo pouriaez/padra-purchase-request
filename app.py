@@ -2027,7 +2027,8 @@ def new_request():
             now = cur.fetchone()[0]
             jalali = jdatetime.datetime.fromgregorian(datetime=now).strftime("%Y/%m/%d")
             cur.execute(
-                """DECLARE @InsertedRequest TABLE (id BIGINT);
+                """SET NOCOUNT ON;
+                   DECLARE @InsertedRequest TABLE (id BIGINT);
                    INSERT INTO Project.requests
                    (request_date,request_date_fa,request_type,unit_name,supply_location,fixed_asset,
                     request_reason,requester_username,workflow_type,status)
@@ -2044,7 +2045,10 @@ def new_request():
                 current_user.username,
                 workflow_type,
             )
-            inserted_request = cur.fetchone()
+            while cur.description is None:
+                if not cur.nextset():
+                    break
+            inserted_request = cur.fetchone() if cur.description is not None else None
             if not inserted_request or inserted_request[0] is None:
                 raise RuntimeError("ثبت درخواست انجام شد اما شناسه درخواست از پایگاه داده دریافت نشد.")
             request_id = int(inserted_request[0])
