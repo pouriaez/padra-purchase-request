@@ -9,7 +9,10 @@
   </div>
   <div class="head-actions">
     {% if has_iam_permission('requests.export') %}
-    <a class="btn secondary" href="{{url_for('export_csv')}}" title="دانلود فایل اکسل (CSV) کلیه درخواست‌ها جهت تحلیل مدیریتی">⬇ خروجی اکسل گزارش (CSV)</a>
+    <a class="btn secondary" href="{{url_for('export_csv')}}" title="دانلود فایل اکسل درخواست‌ها">⬇ خروجی درخواست‌ها</a>
+    {% endif %}
+    {% if has_iam_permission('requests.export') and has_iam_permission('requests.view_all') %}
+    <a class="btn primary" href="{{url_for('reports')}}">📊 گزارش جامع کالاها و خرید</a>
     {% endif %}
     {% if has_iam_permission('requests.create') %}<a class="btn primary" href="{{url_for('new_request')}}">＋ ثبت درخواست خرید جدید (پادرا)</a>{% endif %}
   </div>
