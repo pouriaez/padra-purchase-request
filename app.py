@@ -707,7 +707,11 @@ def db_connect(auth=False):
         try:
             conn = pyodbc.connect(conn_string(auth), timeout=8)
             if not auth:
-                actor_username = str(session.get("_user_id") or "SYSTEM") if has_request_context() else "SYSTEM"
+                actor_username = (
+                    str(current_user.username)
+                    if has_request_context() and current_user.is_authenticated
+                    else "SYSTEM"
+                )
                 context_cursor = conn.cursor()
                 try:
                     context_cursor.execute(
