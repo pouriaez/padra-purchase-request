@@ -1514,7 +1514,7 @@ def index():
 
 
 
-def _load_item_report(cur, args):
+def _load_item_report(cur, args, summary_mode=None):
     filters = {
         "q": args.get("q", "").strip()[:100],
         "request_type": args.get("request_type", "").strip(),
@@ -1611,6 +1611,63 @@ def _load_item_report(cur, args):
             WHERE od.request_item_id=i.id
         ) del
     """ + where + " ORDER BY r.id DESC,i.line_no"
+    if summary_mode == "products":
+        summary_sql = """
+            SELECT
+                COALESCE(i.item_code,N'') AS item_code,
+                i.item_description,
+                i.unit_name,
+                COUNT(*) AS item_request_count,
+                COUNT(DISTINCT r.id) AS distinct_request_count,
+                SUM(i.quantity) AS requested_quantity,
+                SUM(COALESCE(ofr.ordered_quantity,0)) AS ordered_quantity,
+                SUM(COALESCE(del.delivered_quantity,0)) AS delivered_quantity
+            FROM Project.requests r
+            INNER JOIN Project.request_items i ON i.request_id=r.id
+            LEFT JOIN Project.request_item_assignments ia ON ia.request_item_id=i.id
+            OUTER APPLY (
+                SELECT COUNT(*) AS offer_count,
+                       SUM(CASE WHEN o.is_selected=1 THEN o.quantity ELSE 0 END) AS ordered_quantity
+                FROM Project.request_supplier_offers o
+                WHERE o.request_item_id=i.id
+            ) ofr
+            OUTER APPLY (
+                SELECT SUM(d.quantity) AS delivered_quantity
+                FROM Project.request_deliveries d
+                INNER JOIN Project.request_supplier_offers od ON od.id=d.offer_id
+                WHERE od.request_item_id=i.id
+            ) del
+        """ + where + """
+            GROUP BY i.item_code,i.item_description,i.unit_name
+            ORDER BY COUNT(*) DESC,i.item_description
+        """
+        cur.execute(summary_sql, *params)
+        return cur.fetchall(), filters
+
+    if summary_mode == "totals":
+        totals_sql = """
+            SELECT COUNT(DISTINCT r.id),COUNT(*),
+                   SUM(i.quantity),
+                   SUM(COALESCE(ofr.ordered_quantity,0)),
+                   SUM(COALESCE(del.delivered_quantity,0))
+            FROM Project.requests r
+            INNER JOIN Project.request_items i ON i.request_id=r.id
+            LEFT JOIN Project.request_item_assignments ia ON ia.request_item_id=i.id
+            OUTER APPLY (
+                SELECT SUM(CASE WHEN o.is_selected=1 THEN o.quantity ELSE 0 END) AS ordered_quantity
+                FROM Project.request_supplier_offers o
+                WHERE o.request_item_id=i.id
+            ) ofr
+            OUTER APPLY (
+                SELECT SUM(d.quantity) AS delivered_quantity
+                FROM Project.request_deliveries d
+                INNER JOIN Project.request_supplier_offers od ON od.id=d.offer_id
+                WHERE od.request_item_id=i.id
+            ) del
+        """ + where
+        cur.execute(totals_sql, *params)
+        return cur.fetchone(), filters
+
     cur.execute(sql, *params)
     rows = cur.fetchall()
     return rows, filters
@@ -1625,6 +1682,8 @@ def reports():
     try:
         cur = conn.cursor()
         rows, filters = _load_item_report(cur, request.args)
+        product_summary, _ = _load_item_report(cur, request.args, summary_mode="products")
+        totals, _ = _load_item_report(cur, request.args, summary_mode="totals")
         specialists = get_purchase_specialists()
         report_user_names = {}
         for report_row in rows:
@@ -1632,15 +1691,16 @@ def reports():
                 if report_username and report_username not in report_user_names:
                     report_user_names[report_username] = user_display_info(report_username)["full_name"]
         summary = {
-            "requests": len({row[0] for row in rows}),
-            "items": len(rows),
-            "requested_quantity": sum(float(row[12] or 0) for row in rows),
-            "ordered_quantity": sum(float(row[17] or 0) for row in rows),
-            "delivered_quantity": sum(float(row[18] or 0) for row in rows),
+            "requests": int(totals[0] or 0),
+            "items": int(totals[1] or 0),
+            "requested_quantity": float(totals[2] or 0),
+            "ordered_quantity": float(totals[3] or 0),
+            "delivered_quantity": float(totals[4] or 0),
         }
         return render_template(
             "reports.html", rows=rows, filters=filters,
             specialists=specialists, summary=summary,
+            product_summary=product_summary,
             report_user_names=report_user_names,
         )
     finally:
