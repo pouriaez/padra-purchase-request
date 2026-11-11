@@ -1599,7 +1599,7 @@ def _load_item_report(cur, args, summary_mode=None):
         LEFT JOIN Project.request_item_assignments ia ON ia.request_item_id=i.id
         OUTER APPLY (
             SELECT COUNT(*) AS offer_count,
-                   SUM(o.quantity) AS ordered_quantity,
+                   SUM(CASE WHEN o.is_selected=1 THEN o.quantity ELSE 0 END) AS ordered_quantity,
                    MAX(CASE WHEN o.is_selected=1 THEN o.supplier_name END) AS selected_supplier
             FROM Project.request_supplier_offers o
             WHERE o.request_item_id=i.id
