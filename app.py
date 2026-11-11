@@ -3155,6 +3155,67 @@ def cancel_request(request_id):
     return redirect(url_for("view_request", request_id=request_id))
 
 
+
+@app.route("/request/<int:request_id>/items/<int:item_id>/reassign", methods=["POST"])
+@login_required
+def reassign_item_specialist(request_id, item_id):
+    if not has_iam_permission("requests.reassign_specialist"):
+        abort(403)
+    new_specialist = request.form.get("assigned_specialist", "").strip()
+    specialists = {sp["username"]: sp for sp in get_purchase_specialists()}
+    if new_specialist not in specialists:
+        flash("کارشناس خرید انتخاب‌شده معتبر نیست.", "error")
+        return redirect(url_for("view_request", request_id=request_id))
+    conn = cur = None
+    try:
+        conn = data_db()
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT ia.id,ia.assignment_status,i.item_description
+               FROM Project.request_item_assignments ia
+               INNER JOIN Project.request_items i ON i.id=ia.request_item_id
+               INNER JOIN Project.requests r ON r.id=ia.request_id
+               WHERE ia.request_id=? AND ia.request_item_id=? AND r.status='pending'""",
+            request_id, item_id,
+        )
+        assignment = cur.fetchone()
+        if not assignment or assignment[1] not in {"assigned", "rejected"}:
+            conn.rollback()
+            abort(403)
+        cur.execute(
+            """UPDATE Project.request_item_assignments
+               SET specialist_username=?,assignment_status='assigned',
+                   assigned_by=?,assigned_at=SYSUTCDATETIME(),
+                   completed_by=NULL,completed_at=NULL,completion_comment=NULL
+               WHERE id=?""",
+            new_specialist, current_user.username, assignment[0],
+        )
+        cur.execute(
+            """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+               VALUES (?,N'تغییر کارشناس یک قلم کالا',?,?)""",
+            request_id, current_user.username,
+            f"مسئول خرید قلم «{assignment[2]}» به {specialists[new_specialist]['full_name']} ({new_specialist}) تغییر کرد.",
+        )
+        conn.commit()
+        flash("کارشناس مسئول این قلم تغییر کرد.", "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        app.logger.exception("Item specialist reassignment failed")
+        flash("تغییر کارشناس این قلم انجام نشد.", "error")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return redirect(url_for("view_request", request_id=request_id))
+
+
 @app.route("/request/<int:request_id>/reassign", methods=["POST"])
 @login_required
 def reassign_specialist(request_id):
