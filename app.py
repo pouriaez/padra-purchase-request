@@ -2027,10 +2027,13 @@ def new_request():
             now = cur.fetchone()[0]
             jalali = jdatetime.datetime.fromgregorian(datetime=now).strftime("%Y/%m/%d")
             cur.execute(
-                """INSERT INTO Project.requests
+                """DECLARE @InsertedRequest TABLE (id BIGINT);
+                   INSERT INTO Project.requests
                    (request_date,request_date_fa,request_type,unit_name,supply_location,fixed_asset,
                     request_reason,requester_username,workflow_type,status)
-                   VALUES (?,?,?,?,?,?,?,?,?,'pending')""",
+                   OUTPUT INSERTED.id INTO @InsertedRequest(id)
+                   VALUES (?,?,?,?,?,?,?,?,?,'pending');
+                   SELECT id FROM @InsertedRequest;""",
                 now.date(),
                 jalali,
                 request_type,
@@ -2041,8 +2044,10 @@ def new_request():
                 current_user.username,
                 workflow_type,
             )
-            cur.execute("SELECT CAST(SCOPE_IDENTITY() AS BIGINT)")
-            request_id = cur.fetchone()[0]
+            inserted_request = cur.fetchone()
+            if not inserted_request or inserted_request[0] is None:
+                raise RuntimeError("ثبت درخواست انجام شد اما شناسه درخواست از پایگاه داده دریافت نشد.")
+            request_id = int(inserted_request[0])
             request_no = f"PR-{jalali.replace('/', '')}-{request_id:06d}"
             cur.execute("UPDATE Project.requests SET request_no=? WHERE id=?", request_no, request_id)
             for item in items:
