@@ -1127,17 +1127,27 @@ def get_request(request_id):
         )
         history = cur.fetchall()
         audit_log = []
-        try:
-            cur.execute(
-                """SELECT action_type,entity_name,record_id,stage_no,old_values,new_values,
-                          actor_username,created_at
-                   FROM Project.request_audit_log
-                   WHERE request_id=? ORDER BY created_at DESC,id DESC""",
-                request_id,
+        can_view_audit = (
+            current_user.is_authenticated
+            and current_user.username != "kharid_padra"
+            and (
+                has_iam_permission("requests.view_all")
+                or has_iam_permission("requests.assign_specialist")
+                or has_iam_permission("requests.view_padra")
             )
-            audit_log = cur.fetchall()
-        except Exception:
-            app.logger.warning("Request audit table is not installed yet; run sql/009_request_audit_trail.sql.")
+        )
+        if can_view_audit:
+            try:
+                cur.execute(
+                    """SELECT action_type,entity_name,record_id,stage_no,old_values,new_values,
+                              actor_username,created_at
+                       FROM Project.request_audit_log
+                       WHERE request_id=? ORDER BY created_at DESC,id DESC""",
+                    request_id,
+                )
+                audit_log = cur.fetchall()
+            except Exception:
+                app.logger.warning("Request audit table is not installed yet; run sql/009_request_audit_trail.sql.")
         cur.execute(
             """SELECT o.supplier_name,o.proforma_number,o.delivery_date_fa,
                       i.item_description,o.quantity,o.unit_price,o.payment_method,
