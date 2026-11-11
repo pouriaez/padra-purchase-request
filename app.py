@@ -2466,6 +2466,161 @@ def decide_request(request_id):
     return redirect(url_for("view_request", request_id=request_id))
 
 
+
+@app.route("/request/<int:request_id>/items/<int:item_id>/complete", methods=["POST"])
+@login_required
+def complete_assigned_item(request_id, item_id):
+    if not has_iam_permission("requests.view_assigned"):
+        abort(403)
+    comment = request.form.get("comment", "").strip()
+    supplier_names = request.form.getlist("supplier_name[]")
+    supplier_selected = request.form.getlist("supplier_selected[]")
+    proforma_numbers = request.form.getlist("proforma_number[]")
+    delivery_dates = request.form.getlist("delivery_date[]")
+    supplier_quantities = request.form.getlist("supplier_quantity[]")
+    supplier_unit_prices = request.form.getlist("supplier_unit_price[]")
+    payment_methods = request.form.getlist("payment_method[]")
+
+    conn = cur = None
+    try:
+        conn = data_db()
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT ia.id,ia.assignment_status,i.item_description
+               FROM Project.request_item_assignments ia
+               INNER JOIN Project.request_items i ON i.id=ia.request_item_id
+               INNER JOIN Project.requests r ON r.id=ia.request_id
+               WHERE ia.request_id=? AND ia.request_item_id=?
+                 AND ia.specialist_username=? AND r.status='pending'""",
+            request_id, item_id, current_user.username,
+        )
+        assignment = cur.fetchone()
+        if not assignment or assignment[1] != "assigned":
+            conn.rollback()
+            abort(403)
+
+        offers = []
+        try:
+            row_count = max(
+                len(supplier_names), len(supplier_selected), len(proforma_numbers),
+                len(delivery_dates), len(supplier_quantities), len(supplier_unit_prices),
+                len(payment_methods),
+            )
+            for idx in range(row_count):
+                values = [
+                    supplier_names[idx] if idx < len(supplier_names) else "",
+                    supplier_selected[idx] if idx < len(supplier_selected) else "0",
+                    proforma_numbers[idx] if idx < len(proforma_numbers) else "",
+                    delivery_dates[idx] if idx < len(delivery_dates) else "",
+                    supplier_quantities[idx] if idx < len(supplier_quantities) else "",
+                    supplier_unit_prices[idx] if idx < len(supplier_unit_prices) else "",
+                    payment_methods[idx] if idx < len(payment_methods) else "",
+                ]
+                if not any(str(v).strip() for pos, v in enumerate(values) if pos != 1):
+                    continue
+                supplier, selected_raw, proforma, delivery, qty_raw, price_raw, payment = [str(v).strip() for v in values]
+                if not all([supplier, proforma, delivery, qty_raw, price_raw, payment]):
+                    raise ValueError(f"اطلاعات تأمین‌کننده در ردیف {idx + 1} کامل نیست.")
+                delivery = validate_jalali_date(delivery, f"تاریخ تحویل ردیف {idx + 1}")
+                qty = Decimal(normalize_digits(qty_raw).replace(",", ""))
+                price = Decimal(normalize_digits(price_raw).replace(",", ""))
+                if qty <= 0 or price <= 0:
+                    raise ValueError(f"تعداد و فی واحد ردیف {idx + 1} باید بیشتر از صفر باشد.")
+                if selected_raw not in {"0", "1"}:
+                    raise ValueError(f"وضعیت انتخاب تأمین‌کننده در ردیف {idx + 1} معتبر نیست.")
+                offers.append((supplier, selected_raw == "1", proforma, delivery, qty, price, payment))
+        except (InvalidOperation, ValueError) as exc:
+            conn.rollback()
+            flash(str(exc) if isinstance(exc, ValueError) else "تعداد یا فی واحد معتبر نیست.", "error")
+            return redirect(url_for("view_request", request_id=request_id))
+
+        if not offers:
+            conn.rollback()
+            flash("برای تکمیل این قلم، حداقل یک استعلام بها ثبت کنید.", "error")
+            return redirect(url_for("view_request", request_id=request_id))
+        if sum(1 for offer in offers if offer[1]) != 1:
+            conn.rollback()
+            flash("برای هر قلم دقیقاً یک تأمین‌کننده باید به‌عنوان گزینه منتخب مشخص شود.", "error")
+            return redirect(url_for("view_request", request_id=request_id))
+
+        for offer in offers:
+            cur.execute(
+                """INSERT INTO Project.request_supplier_offers
+                   (request_id,request_item_id,supplier_name,proforma_number,delivery_date_fa,
+                    quantity,unit_price,payment_method,is_selected,created_by)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                request_id, item_id, offer[0], offer[2], offer[3],
+                offer[4], offer[5], offer[6], offer[1], current_user.username,
+            )
+
+        summary = "؛ ".join(
+            f"{offer[0]} / پیش‌فاکتور {offer[2]} / تعداد {offer[4]} / فی {offer[5]}"
+            for offer in offers
+        )
+        completion_note = (comment + " — " if comment else "") + summary
+        cur.execute(
+            """UPDATE Project.request_item_assignments
+               SET assignment_status='completed',completed_by=?,completed_at=SYSUTCDATETIME(),
+                   completion_comment=?
+               WHERE id=? AND assignment_status='assigned'""",
+            current_user.username, completion_note, assignment[0],
+        )
+        cur.execute(
+            """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+               VALUES (?,N'تکمیل خرید قلم کالا',?,?)""",
+            request_id, current_user.username,
+            f"قلم «{assignment[2]}» توسط کارشناس خرید تکمیل شد. {completion_note}",
+        )
+        cur.execute(
+            """SELECT COUNT(*),SUM(CASE WHEN assignment_status='completed' THEN 1 ELSE 0 END),
+                      SUM(CASE WHEN assignment_status='assigned' THEN 1 ELSE 0 END)
+               FROM Project.request_item_assignments WHERE request_id=?""",
+            request_id,
+        )
+        totals = cur.fetchone()
+        all_items_complete = bool(totals and totals[0] and int(totals[0]) == int(totals[1] or 0))
+        if all_items_complete:
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET decision='approved',approver_username=N'ITEM_ASSIGNMENTS_COMPLETED',
+                       approver_title=N'تکمیل همه اقلام توسط کارشناسان خرید',
+                       comment=N'تمام اقلام درخواست به‌صورت مستقل تعیین‌تکلیف و تکمیل شدند.',
+                       decided_at=GETDATE()
+                   WHERE request_id=? AND step_no=3 AND decision IN ('pending','waiting')""",
+                request_id,
+            )
+            cur.execute(
+                "UPDATE Project.requests SET status='approved',updated_at=GETDATE() WHERE id=?",
+                request_id,
+            )
+            cur.execute(
+                """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+                   VALUES (?,N'تکمیل نهایی درخواست خرید',N'SYSTEM',N'تمام اقلام درخواست توسط کارشناسان مسئول تکمیل شدند و پرونده بسته شد.')""",
+                request_id,
+            )
+        conn.commit()
+        if all_items_complete:
+            flash("این قلم تکمیل شد و چون تمام اقلام درخواست تعیین‌تکلیف شده‌اند، پرونده نیز تکمیل شد.", "success")
+        else:
+            flash("اطلاعات خرید این قلم ثبت شد. سایر کارشناسان می‌توانند اقلام ارجاع‌شده به خود را تکمیل کنند.", "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        app.logger.exception("Assigned item completion failed")
+        flash("ثبت اطلاعات خرید این قلم انجام نشد.", "error")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return redirect(url_for("view_request", request_id=request_id))
+
+
 @app.route("/request/<int:request_id>/delivery", methods=["POST"])
 @login_required
 def record_delivery(request_id):
