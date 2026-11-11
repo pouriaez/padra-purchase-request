@@ -1634,7 +1634,7 @@ def export_item_report():
         cur = conn.cursor()
         rows, filters = _load_item_report(cur, request.args)
         buf = io.StringIO()
-        buf.write("\\ufeff")
+        buf.write("\ufeff")
         writer = csv.writer(buf)
         writer.writerow([
             "شماره درخواست","تاریخ درخواست","نوع درخواست","واحد درخواست‌کننده",
