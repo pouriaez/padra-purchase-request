@@ -720,6 +720,7 @@ def db_connect(auth=False):
                     )
                 finally:
                     context_cursor.close()
+                conn.commit()
             return conn
         except Exception as exc:
             prefix = "AUTH_DB_" if auth else "DATA_DB_"
