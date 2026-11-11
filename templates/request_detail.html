@@ -252,7 +252,7 @@
           <table class="items-table">
             <thead><tr><th>ردیف</th><th>کد کالا</th><th>شرح کالا</th><th>مقدار</th><th>کارشناس مسئول</th></tr></thead>
             <tbody>
-              {% for x in data.items %}
+              {% for x in data['items'] %}
               <tr>
                 <td>{{x[0]}}</td><td>{{x[1] or '—'}}</td><td>{{x[2]}}</td><td>{{x[4]}}</td>
                 <td>
