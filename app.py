@@ -1626,6 +1626,11 @@ def reports():
         cur = conn.cursor()
         rows, filters = _load_item_report(cur, request.args)
         specialists = get_purchase_specialists()
+        report_user_names = {}
+        for report_row in rows:
+            for report_username in (report_row[5], report_row[14]):
+                if report_username and report_username not in report_user_names:
+                    report_user_names[report_username] = user_display_info(report_username)["full_name"]
         summary = {
             "requests": len({row[0] for row in rows}),
             "items": len(rows),
@@ -1636,6 +1641,7 @@ def reports():
         return render_template(
             "reports.html", rows=rows, filters=filters,
             specialists=specialists, summary=summary,
+            report_user_names=report_user_names,
         )
     finally:
         conn.close()
@@ -1662,12 +1668,17 @@ def export_item_report():
         type_map = {"goods":"مواد اولیه","equipment":"تجهیزات","service":"خدمات","other":"سایر"}
         status_map = {"pending":"در جریان","submitted":"ثبت‌شده","approved":"تکمیل","rejected":"رد شده","cancelled":"لغو شده"}
         assignment_map = {"assigned":"در حال اقدام","completed":"تکمیل‌شده","rejected":"رد شده","unassigned":"بدون تخصیص"}
+        report_user_names = {}
+        for report_row in rows:
+            for report_username in (report_row[5], report_row[14]):
+                if report_username and report_username not in report_user_names:
+                    report_user_names[report_username] = user_display_info(report_username)["full_name"]
         for row in rows:
             writer.writerow([
                 row[1],row[2],type_map.get(row[3],row[3]),row[4],
-                user_display_info(row[5])["full_name"],status_map.get(row[6],row[6]),
+                report_user_names.get(row[5], row[5]),status_map.get(row[6],row[6]),
                 row[8],row[9],row[10],row[11],row[12],row[13],
-                user_display_info(row[14])["full_name"] if row[14] else "—",
+                report_user_names.get(row[14], "—") if row[14] else "—",
                 assignment_map.get(row[15],row[15]),row[16],row[17],row[18],row[19]
             ])
         return Response(
