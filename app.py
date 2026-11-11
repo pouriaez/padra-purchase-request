@@ -1717,7 +1717,7 @@ def export_product_summary():
         cur = conn.cursor()
         rows, _filters = _load_item_report(cur, request.args, summary_mode="products")
         buf = io.StringIO()
-        buf.write("\\ufeff")
+        buf.write("\ufeff")
         writer = csv.writer(buf)
         writer.writerow([
             "کد کالا","شرح کالا","واحد","تعداد دفعات درخواست",
