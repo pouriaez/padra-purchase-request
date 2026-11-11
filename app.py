@@ -2028,13 +2028,11 @@ def new_request():
             jalali = jdatetime.datetime.fromgregorian(datetime=now).strftime("%Y/%m/%d")
             cur.execute(
                 """SET NOCOUNT ON;
-                   DECLARE @InsertedRequest TABLE (id BIGINT);
                    INSERT INTO Project.requests
                    (request_date,request_date_fa,request_type,unit_name,supply_location,fixed_asset,
                     request_reason,requester_username,workflow_type,status)
-                   OUTPUT INSERTED.id INTO @InsertedRequest(id)
                    VALUES (?,?,?,?,?,?,?,?,?,'pending');
-                   SELECT id FROM @InsertedRequest;""",
+                   SELECT CAST(SCOPE_IDENTITY() AS BIGINT) AS request_id;""",
                 now.date(),
                 jalali,
                 request_type,
@@ -2050,7 +2048,7 @@ def new_request():
                     break
             inserted_request = cur.fetchone() if cur.description is not None else None
             if not inserted_request or inserted_request[0] is None:
-                raise RuntimeError("ثبت درخواست انجام شد اما شناسه درخواست از پایگاه داده دریافت نشد.")
+                raise RuntimeError("درج درخواست انجام شد اما شناسه آن از همان تراکنش دریافت نشد.")
             request_id = int(inserted_request[0])
             request_no = f"PR-{jalali.replace('/', '')}-{request_id:06d}"
             cur.execute("UPDATE Project.requests SET request_no=? WHERE id=?", request_no, request_id)
