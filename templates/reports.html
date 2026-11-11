@@ -8,7 +8,8 @@
     <p>گزارش در سطح هر قلم کالا؛ همراه با اطلاعات درخواست، تخصیص کارشناس، استعلام، سفارش و تحویل</p>
   </div>
   <div class="head-actions">
-    <a class="btn secondary" href="{{url_for('export_item_report', **filters)}}">⬇ خروجی اکسل گزارش اقلام (CSV)</a>
+    <a class="btn secondary" href="{{url_for('export_product_summary', **filters)}}">⬇ خروجی خلاصه کالاها (CSV)</a>
+    <a class="btn secondary" href="{{url_for('export_item_report', **filters)}}">⬇ خروجی تفصیلی اقلام (CSV)</a>
     <a class="btn secondary" href="{{url_for('index')}}">بازگشت به داشبورد</a>
   </div>
 </section>
