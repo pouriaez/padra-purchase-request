@@ -1485,6 +1485,7 @@ def index():
                        SELECT offer_id,SUM(quantity) AS delivered_quantity
                        FROM Project.request_deliveries GROUP BY offer_id
                    ) d ON d.offer_id=o.id
+                   WHERE o.is_selected=1
                    GROUP BY o.request_id"""
             )
             for req_id, ordered_total, delivered_total in cur.fetchall():
