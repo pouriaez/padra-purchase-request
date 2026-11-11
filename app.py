@@ -17,7 +17,7 @@ if VENDOR_DIR.exists() and str(VENDOR_DIR) not in sys.path:
 
 import jdatetime
 from dotenv import load_dotenv
-from flask import Flask, Response, flash, redirect, render_template, request, url_for, abort, session, g, jsonify
+from flask import Flask, Response, flash, redirect, render_template, request, url_for, abort, session, g, jsonify, has_request_context
 from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.exceptions import HTTPException
@@ -705,7 +705,18 @@ def db_connect(auth=False):
         if pyodbc is None:
             raise RuntimeError("pyodbc is not installed; install requirements-windows.txt.")
         try:
-            return pyodbc.connect(conn_string(auth), timeout=8)
+            conn = pyodbc.connect(conn_string(auth), timeout=8)
+            if not auth:
+                actor_username = str(session.get("_user_id") or "SYSTEM") if has_request_context() else "SYSTEM"
+                context_cursor = conn.cursor()
+                try:
+                    context_cursor.execute(
+                        "EXEC sys.sp_set_session_context @key=N'actor_username', @value=?;",
+                        actor_username,
+                    )
+                finally:
+                    context_cursor.close()
+            return conn
         except Exception as exc:
             prefix = "AUTH_DB_" if auth else "DATA_DB_"
             app.logger.exception("%s SQL Server connection failed", prefix)
@@ -1111,6 +1122,18 @@ def get_request(request_id):
             request_id,
         )
         history = cur.fetchall()
+        audit_log = []
+        try:
+            cur.execute(
+                """SELECT action_type,entity_name,record_id,stage_no,old_values,new_values,
+                          actor_username,created_at
+                   FROM Project.request_audit_log
+                   WHERE request_id=? ORDER BY created_at DESC,id DESC""",
+                request_id,
+            )
+            audit_log = cur.fetchall()
+        except Exception:
+            app.logger.warning("Request audit table is not installed yet; run sql/009_request_audit_trail.sql.")
         cur.execute(
             """SELECT o.supplier_name,o.proforma_number,o.delivery_date_fa,
                       i.item_description,o.quantity,o.unit_price,o.payment_method,
@@ -1149,6 +1172,7 @@ def get_request(request_id):
             "items": items,
             "approvals": approvals,
             "history": history,
+            "audit_log": audit_log,
             "supplier_offers": supplier_offers,
             "delivery_rows": delivery_rows,
             "delivery_progress": delivery_progress,
