@@ -1786,39 +1786,86 @@ def view_request(request_id):
 
     current_approval = next((a for a in data["approvals"] if a[3] == "pending"), None)
     previous_approval = None
-    can_return_request = False
+    can_withdraw_referral = False
+    withdraw_target_title = ""
+    can_return_to_previous = False
     return_target_title = ""
-    if h[12] == "padra" and h[9] == "pending" and current_approval and current_approval[0] in (2, 3):
-        previous_approval = next(
-            (a for a in data["approvals"] if a[0] == current_approval[0] - 1),
-            None,
-        )
-        downstream_not_acted = all(
-            a[3] in ("pending", "waiting")
-            for a in data["approvals"]
-            if a[0] >= current_approval[0]
-        )
-        if previous_approval and previous_approval[3] == "approved":
-            if previous_approval[0] == 1:
-                actor_allowed = (
-                    previous_approval[1] == current_user.username
-                    and has_iam_permission("requests.approve.padra")
-                )
-            else:
-                actor_allowed = (
-                    previous_approval[1] == current_user.username
-                    and has_iam_permission("requests.approve.step2")
-                    and has_iam_permission("requests.assign_specialist")
-                )
-            can_return_request = bool(actor_allowed and downstream_not_acted)
-            return_target_title = previous_approval[2]
+    can_resubmit_request = False
+
+    if h[12] == "padra" and h[9] == "pending" and current_approval:
+        if (
+            current_approval[0] == 1
+            and h[8] == current_user.username
+            and current_approval[1] == "i.heydari"
+            and has_iam_permission("requests.create")
+        ):
+            can_withdraw_referral = True
+            withdraw_target_title = "کارتابل ثبت‌کننده پادرا"
+        elif current_approval[0] in (2, 3):
+            previous_approval = next(
+                (a for a in data["approvals"] if a[0] == current_approval[0] - 1),
+                None,
+            )
+            if previous_approval and previous_approval[3] == "approved":
+                if previous_approval[0] == 1:
+                    actor_allowed = (
+                        previous_approval[1] == current_user.username
+                        and has_iam_permission("requests.approve.padra")
+                    )
+                else:
+                    actor_allowed = (
+                        previous_approval[1] == current_user.username
+                        and has_iam_permission("requests.approve.step2")
+                        and has_iam_permission("requests.assign_specialist")
+                    )
+                can_withdraw_referral = bool(actor_allowed)
+                withdraw_target_title = previous_approval[2]
+
+        if current_approval[0] == 1:
+            can_return_to_previous = (
+                current_approval[1] == current_user.username
+                and has_iam_permission("requests.approve.padra")
+            )
+            return_target_title = "ثبت‌کننده درخواست پادرا"
+        elif current_approval[0] == 2:
+            previous_approval = next((a for a in data["approvals"] if a[0] == 1), None)
+            can_return_to_previous = bool(
+                current_approval[1] == current_user.username
+                and has_iam_permission("requests.approve.step2")
+                and has_iam_permission("requests.assign_specialist")
+                and previous_approval
+                and previous_approval[3] == "approved"
+            )
+            return_target_title = previous_approval[2] if previous_approval else "مرحله قبل"
+        elif current_approval[0] == 3:
+            previous_approval = next((a for a in data["approvals"] if a[0] == 2), None)
+            can_return_to_previous = bool(
+                current_approval[1] == current_user.username
+                and has_iam_permission("requests.approve.step3")
+                and previous_approval
+                and previous_approval[3] == "approved"
+            )
+            return_target_title = previous_approval[2] if previous_approval else "مرحله قبل"
+
+    if (
+        h[12] == "padra"
+        and h[9] == "submitted"
+        and h[8] == current_user.username
+        and has_iam_permission("requests.create")
+        and data["approvals"]
+        and all(a[3] == "waiting" for a in data["approvals"])
+    ):
+        can_resubmit_request = True
 
     return render_template(
         "request_detail.html",
         data=data,
         username=current_user.username,
-        can_return_request=can_return_request,
+        can_withdraw_referral=can_withdraw_referral,
+        withdraw_target_title=withdraw_target_title,
+        can_return_to_previous=can_return_to_previous,
         return_target_title=return_target_title,
+        can_resubmit_request=can_resubmit_request,
     )
 
 
@@ -2208,9 +2255,10 @@ def record_delivery(request_id):
 @app.route("/request/<int:request_id>/return", methods=["POST"])
 @login_required
 def return_request(request_id):
+    """پس گرفتن ارجاع توسط ثبت‌کننده یا مسئول مرحله قبلی، پیش از اقدام نفر بعد."""
     reason = request.form.get("return_reason", "").strip()
     if not reason:
-        flash("ثبت علت بازگردانی درخواست الزامی است.", "error")
+        flash("ثبت علت پس گرفتن ارجاع الزامی است.", "error")
         return redirect(url_for("view_request", request_id=request_id))
 
     conn = cur = None
@@ -2219,7 +2267,7 @@ def return_request(request_id):
         conn.autocommit = False
         cur = conn.cursor()
         cur.execute(
-            """SELECT workflow_type,status
+            """SELECT workflow_type,status,requester_username
                FROM Project.requests WITH (UPDLOCK, ROWLOCK)
                WHERE id=?""",
             request_id,
@@ -2237,72 +2285,103 @@ def return_request(request_id):
         )
         approvals = cur.fetchall()
         active = next((a for a in approvals if a[3] == "pending"), None)
-        if not active or active[0] not in (2, 3):
+        if not active:
             conn.rollback()
             abort(403)
 
-        previous = next((a for a in approvals if a[0] == active[0] - 1), None)
-        downstream_not_acted = all(
-            a[3] in ("pending", "waiting")
-            for a in approvals
-            if a[0] >= active[0]
-        )
-        if not previous or previous[3] != "approved" or not downstream_not_acted:
-            conn.rollback()
-            abort(403)
-
-        if previous[0] == 1:
+        # ثبت‌کننده پادرا می‌تواند ارجاع اولیه به مدیرعامل را پس بگیرد.
+        if active[0] == 1:
             permitted = (
-                previous[1] == current_user.username
-                and has_iam_permission("requests.approve.padra")
+                request_row[2] == current_user.username
+                and has_iam_permission("requests.create")
+                and active[1] == "i.heydari"
             )
+            if not permitted:
+                conn.rollback()
+                abort(403)
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET decision='waiting',comment=NULL,decided_at=NULL
+                   WHERE request_id=? AND decision IN ('pending','waiting')""",
+                request_id,
+            )
+            cur.execute(
+                """UPDATE Project.requests SET status='submitted',updated_at=GETDATE()
+                   WHERE id=? AND status='pending'""",
+                request_id,
+            )
+            details = f"ثبت‌کننده پادرا ارجاع درخواست به مدیرعامل را پس گرفت. درخواست به کارتابل ثبت‌کننده برگشت. علت: {reason}"
+            action_name = "پس گرفتن ارجاع توسط ثبت‌کننده پادرا"
+            success_message = "ارجاع با موفقیت پس گرفته شد و درخواست به کارتابل شما برگشت."
         else:
-            permitted = (
-                previous[1] == current_user.username
-                and has_iam_permission("requests.approve.step2")
-                and has_iam_permission("requests.assign_specialist")
-            )
-        if not permitted:
-            conn.rollback()
-            abort(403)
+            if active[0] not in (2, 3):
+                conn.rollback()
+                abort(403)
+            previous = next((a for a in approvals if a[0] == active[0] - 1), None)
+            if not previous or previous[3] != "approved":
+                conn.rollback()
+                abort(403)
 
-        previous_step = previous[0]
-        cur.execute(
-            """UPDATE Project.approvals
-               SET decision='pending',comment=NULL,decided_at=NULL
-               WHERE request_id=? AND step_no=? AND decision='approved'""",
-            request_id, previous_step,
-        )
-        cur.execute(
-            """UPDATE Project.approvals
-               SET decision='waiting',comment=NULL,decided_at=NULL
-               WHERE request_id=? AND step_no>=?""",
-            request_id, active[0],
-        )
-        cur.execute(
-            """UPDATE Project.approvals
-               SET approver_username=N'UNASSIGNED_SPECIALIST',
-                   approver_title=N'کارشناس خرید داخلی گروه صنعتی سرکان'
-               WHERE request_id=? AND step_no=3""",
-            request_id,
-        )
-        cur.execute(
-            """UPDATE Project.requests
-               SET status='pending',assigned_specialist=NULL,updated_at=GETDATE()
-               WHERE id=?""",
-            request_id,
-        )
-        details = (
-            f"درخواست از مرحله {active[0]} به مرحله {previous_step} "
-            f"({previous[2]}) بازگردانده شد. علت: {reason}"
-        )
+            if previous[0] == 1:
+                permitted = (
+                    previous[1] == current_user.username
+                    and has_iam_permission("requests.approve.padra")
+                )
+            else:
+                permitted = (
+                    previous[1] == current_user.username
+                    and has_iam_permission("requests.approve.step2")
+                    and has_iam_permission("requests.assign_specialist")
+                )
+            downstream_not_acted = all(
+                a[3] in ("pending", "waiting")
+                for a in approvals
+                if a[0] >= active[0]
+            )
+            if not permitted or not downstream_not_acted:
+                conn.rollback()
+                abort(403)
+
+            previous_step = previous[0]
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET decision='pending',comment=NULL,decided_at=NULL
+                   WHERE request_id=? AND step_no=? AND decision='approved'""",
+                request_id, previous_step,
+            )
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET decision='waiting',comment=NULL,decided_at=NULL
+                   WHERE request_id=? AND step_no>=?""",
+                request_id, active[0],
+            )
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET approver_username=N'UNASSIGNED_SPECIALIST',
+                       approver_title=N'کارشناس خرید داخلی گروه صنعتی سرکان'
+                   WHERE request_id=? AND step_no=3""",
+                request_id,
+            )
+            cur.execute(
+                """UPDATE Project.requests
+                   SET status='pending',assigned_specialist=NULL,updated_at=GETDATE()
+                   WHERE id=?""",
+                request_id,
+            )
+            details = (
+                f"ارجاع از مرحله {active[0]} پس گرفته شد و درخواست به کارتابل مرحله "
+                f"{previous_step} ({previous[2]}) برگشت. علت: {reason}"
+            )
+            action_name = "پس گرفتن ارجاع توسط مسئول مرحله قبل"
+            success_message = f"ارجاع پس گرفته شد و درخواست به کارتابل «{previous[2]}» برگشت."
+
         cur.execute(
             """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
-               VALUES (?,N'بازگردانی زنجیره‌ای درخواست به مرحله قبل',?,?)""",
-            request_id, current_user.username, details,
+               VALUES (?,?,?,?)""",
+            request_id, action_name, current_user.username, details,
         )
         conn.commit()
-        flash(f"درخواست با موفقیت به مرحله قبل ({previous[2]}) بازگردانده شد.", "success")
+        flash(success_message, "success")
     except HTTPException:
         if conn:
             conn.rollback()
@@ -2310,8 +2389,227 @@ def return_request(request_id):
     except Exception:
         if conn:
             conn.rollback()
-        app.logger.exception("Purchase request return failed")
-        flash("بازگردانی درخواست انجام نشد؛ تغییری در اطلاعات ثبت نشد.", "error")
+        app.logger.exception("Purchase request referral withdrawal failed")
+        flash("پس گرفتن ارجاع انجام نشد؛ تغییری در اطلاعات ثبت نشد.", "error")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return redirect(url_for("view_request", request_id=request_id))
+
+
+@app.route("/request/<int:request_id>/return-to-previous", methods=["POST"])
+@login_required
+def return_request_to_previous(request_id):
+    """بازگرداندن درخواست توسط مسئول فعلی به کارتابل مرحله قبلی."""
+    reason = request.form.get("return_reason", "").strip()
+    if not reason:
+        flash("ثبت علت بازگشت درخواست الزامی است.", "error")
+        return redirect(url_for("view_request", request_id=request_id))
+
+    conn = cur = None
+    try:
+        conn = data_db()
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT workflow_type,status,requester_username
+               FROM Project.requests WITH (UPDLOCK, ROWLOCK)
+               WHERE id=?""",
+            request_id,
+        )
+        request_row = cur.fetchone()
+        if not request_row or request_row[0] != "padra" or request_row[1] != "pending":
+            conn.rollback()
+            abort(403)
+
+        cur.execute(
+            """SELECT step_no,approver_username,approver_title,decision
+               FROM Project.approvals WITH (UPDLOCK, ROWLOCK)
+               WHERE request_id=? ORDER BY step_no""",
+            request_id,
+        )
+        approvals = cur.fetchall()
+        active = next((a for a in approvals if a[3] == "pending"), None)
+        if not active or active[1] != current_user.username:
+            conn.rollback()
+            abort(403)
+
+        if active[0] == 1:
+            permitted = has_iam_permission("requests.approve.padra")
+            if not permitted:
+                conn.rollback()
+                abort(403)
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET decision='waiting',comment=NULL,decided_at=NULL
+                   WHERE request_id=? AND decision IN ('pending','waiting')""",
+                request_id,
+            )
+            cur.execute(
+                """UPDATE Project.requests SET status='submitted',updated_at=GETDATE()
+                   WHERE id=?""",
+                request_id,
+            )
+            action_name = "بازگشت درخواست از مدیرعامل به ثبت‌کننده پادرا"
+            details = f"مدیرعامل پادرا درخواست را به کارتابل ثبت‌کننده ({request_row[2]}) بازگرداند. علت: {reason}"
+            success_message = "درخواست به کارتابل ثبت‌کننده پادرا بازگردانده شد."
+        elif active[0] == 2:
+            previous = next((a for a in approvals if a[0] == 1), None)
+            permitted = (
+                has_iam_permission("requests.approve.step2")
+                and has_iam_permission("requests.assign_specialist")
+                and previous
+                and previous[3] == "approved"
+            )
+            if not permitted:
+                conn.rollback()
+                abort(403)
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET decision='pending',comment=NULL,decided_at=NULL
+                   WHERE request_id=? AND step_no=1 AND decision='approved'""",
+                request_id,
+            )
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET decision='waiting',comment=NULL,decided_at=NULL
+                   WHERE request_id=? AND step_no>=2""",
+                request_id,
+            )
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET approver_username=N'UNASSIGNED_SPECIALIST',
+                       approver_title=N'کارشناس خرید داخلی گروه صنعتی سرکان'
+                   WHERE request_id=? AND step_no=3""",
+                request_id,
+            )
+            cur.execute(
+                """UPDATE Project.requests SET status='pending',assigned_specialist=NULL,updated_at=GETDATE()
+                   WHERE id=?""",
+                request_id,
+            )
+            action_name = "بازگشت درخواست از مدیر خرید به مدیرعامل پادرا"
+            details = f"مدیر خرید داخلی سرکان درخواست را به کارتابل مدیرعامل پادرا بازگرداند. علت: {reason}"
+            success_message = "درخواست به کارتابل مدیرعامل پادرا بازگردانده شد."
+        elif active[0] == 3:
+            previous = next((a for a in approvals if a[0] == 2), None)
+            permitted = (
+                has_iam_permission("requests.approve.step3")
+                and previous
+                and previous[3] == "approved"
+            )
+            if not permitted:
+                conn.rollback()
+                abort(403)
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET decision='pending',comment=NULL,decided_at=NULL
+                   WHERE request_id=? AND step_no=2 AND decision='approved'""",
+                request_id,
+            )
+            cur.execute(
+                """UPDATE Project.approvals
+                   SET approver_username=N'UNASSIGNED_SPECIALIST',
+                       approver_title=N'کارشناس خرید داخلی گروه صنعتی سرکان',
+                       decision='waiting',comment=NULL,decided_at=NULL
+                   WHERE request_id=? AND step_no=3""",
+                request_id,
+            )
+            cur.execute(
+                """UPDATE Project.requests SET status='pending',assigned_specialist=NULL,updated_at=GETDATE()
+                   WHERE id=?""",
+                request_id,
+            )
+            action_name = "بازگشت درخواست از کارشناس خرید به مدیر خرید سرکان"
+            details = f"کارشناس خرید درخواست را به کارتابل مدیر خرید داخلی سرکان بازگرداند. علت: {reason}"
+            success_message = "درخواست به کارتابل مدیر خرید داخلی سرکان بازگردانده شد."
+        else:
+            conn.rollback()
+            abort(403)
+
+        cur.execute(
+            """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+               VALUES (?,?,?,?)""",
+            request_id, action_name, current_user.username, details,
+        )
+        conn.commit()
+        flash(success_message, "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        app.logger.exception("Purchase request previous-stage return failed")
+        flash("بازگرداندن درخواست انجام نشد؛ تغییری در اطلاعات ثبت نشد.", "error")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return redirect(url_for("view_request", request_id=request_id))
+
+
+@app.route("/request/<int:request_id>/resubmit", methods=["POST"])
+@login_required
+def resubmit_request(request_id):
+    """ارسال مجدد درخواست توسط ثبت‌کننده پس از پس گرفتن ارجاع یا بازگشت از مدیرعامل."""
+    if not has_iam_permission("requests.create"):
+        abort(403)
+    conn = cur = None
+    try:
+        conn = data_db()
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT workflow_type,status,requester_username
+               FROM Project.requests WITH (UPDLOCK, ROWLOCK)
+               WHERE id=?""",
+            request_id,
+        )
+        row = cur.fetchone()
+        if not row or row[0] != "padra" or row[1] != "submitted" or row[2] != current_user.username:
+            conn.rollback()
+            abort(403)
+        cur.execute(
+            """SELECT id,decision,approver_username FROM Project.approvals WITH (UPDLOCK, ROWLOCK)
+               WHERE request_id=? AND step_no=1""",
+            request_id,
+        )
+        first = cur.fetchone()
+        if not first or first[1] != "waiting" or first[2] != "i.heydari":
+            conn.rollback()
+            abort(403)
+        cur.execute(
+            """UPDATE Project.approvals
+               SET decision='pending',comment=NULL,decided_at=NULL
+               WHERE id=? AND decision='waiting'""",
+            first[0],
+        )
+        cur.execute(
+            """UPDATE Project.requests SET status='pending',updated_at=GETDATE()
+               WHERE id=? AND status='submitted'""",
+            request_id,
+        )
+        cur.execute(
+            """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+               VALUES (?,N'ارسال مجدد درخواست به مدیرعامل پادرا',?,N'ثبت‌کننده درخواست را پس از بازبینی مجدداً به کارتابل مدیرعامل پادرا ارسال کرد.')""",
+            request_id, current_user.username,
+        )
+        conn.commit()
+        flash("درخواست مجدداً به کارتابل مدیرعامل پادرا ارسال شد.", "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        app.logger.exception("Purchase request resubmission failed")
+        flash("ارسال مجدد درخواست انجام نشد.", "error")
     finally:
         if cur:
             cur.close()
