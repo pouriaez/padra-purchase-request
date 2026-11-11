@@ -1515,6 +1515,152 @@ def index():
         conn.close()
 
 
+
+def _load_item_report(cur, args):
+    filters = {
+        "q": args.get("q", "").strip()[:100],
+        "request_type": args.get("request_type", "").strip(),
+        "status": args.get("status", "").strip(),
+        "specialist": args.get("specialist", "").strip(),
+        "assignment_status": args.get("assignment_status", "").strip(),
+        "from_date": args.get("from_date", "").strip(),
+        "to_date": args.get("to_date", "").strip(),
+    }
+    clauses = []
+    params = []
+    if filters["request_type"] in {"goods", "equipment", "service", "other"}:
+        clauses.append("r.request_type=?")
+        params.append(filters["request_type"])
+    else:
+        filters["request_type"] = ""
+    if filters["status"] in {"pending", "submitted", "approved", "rejected", "cancelled"}:
+        clauses.append("r.status=?")
+        params.append(filters["status"])
+    else:
+        filters["status"] = ""
+    if filters["specialist"]:
+        clauses.append("ia.specialist_username=?")
+        params.append(filters["specialist"])
+    if filters["assignment_status"] in {"assigned", "completed", "rejected", "unassigned"}:
+        if filters["assignment_status"] == "unassigned":
+            clauses.append("ia.id IS NULL")
+        else:
+            clauses.append("ia.assignment_status=?")
+            params.append(filters["assignment_status"])
+    else:
+        filters["assignment_status"] = ""
+    if filters["from_date"]:
+        clauses.append("r.request_date_fa>=?")
+        params.append(filters["from_date"])
+    if filters["to_date"]:
+        clauses.append("r.request_date_fa<=?")
+        params.append(filters["to_date"])
+    if filters["q"]:
+        like = "%" + filters["q"] + "%"
+        clauses.append("""(
+            r.request_no LIKE ? OR r.unit_name LIKE ? OR r.requester_username LIKE ?
+            OR i.item_code LIKE ? OR i.item_description LIKE ?
+            OR ia.specialist_username LIKE ?
+            OR EXISTS (SELECT 1 FROM Project.request_supplier_offers sx
+                       WHERE sx.request_item_id=i.id AND sx.supplier_name LIKE ?)
+        )""")
+        params.extend([like] * 7)
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    sql = """
+        SELECT TOP (5000)
+            r.id,r.request_no,r.request_date_fa,r.request_type,r.unit_name,
+            r.requester_username,r.status,i.id,i.line_no,i.item_code,
+            i.item_description,i.unit_name,i.quantity,i.needed_date_fa,
+            COALESCE(ia.specialist_username,N'') AS specialist_username,
+            COALESCE(ia.assignment_status,'unassigned') AS assignment_status,
+            COALESCE(ofr.offer_count,0) AS offer_count,
+            COALESCE(ofr.ordered_quantity,0) AS ordered_quantity,
+            COALESCE(del.delivered_quantity,0) AS delivered_quantity,
+            COALESCE(ofr.selected_supplier,N'') AS selected_supplier
+        FROM Project.requests r
+        INNER JOIN Project.request_items i ON i.request_id=r.id
+        LEFT JOIN Project.request_item_assignments ia ON ia.request_item_id=i.id
+        OUTER APPLY (
+            SELECT COUNT(*) AS offer_count,
+                   SUM(o.quantity) AS ordered_quantity,
+                   MAX(CASE WHEN o.is_selected=1 THEN o.supplier_name END) AS selected_supplier
+            FROM Project.request_supplier_offers o
+            WHERE o.request_item_id=i.id
+        ) ofr
+        OUTER APPLY (
+            SELECT SUM(d.quantity) AS delivered_quantity
+            FROM Project.request_deliveries d
+            INNER JOIN Project.request_supplier_offers od ON od.id=d.offer_id
+            WHERE od.request_item_id=i.id
+        ) del
+    """ + where + " ORDER BY r.id DESC,i.line_no"
+    cur.execute(sql, *params)
+    rows = cur.fetchall()
+    return rows, filters
+
+
+@app.route("/reports")
+@login_required
+def reports():
+    if not has_iam_permission("requests.export") or not has_iam_permission("requests.view_all"):
+        abort(403)
+    conn = data_db()
+    try:
+        cur = conn.cursor()
+        rows, filters = _load_item_report(cur, request.args)
+        specialists = get_purchase_specialists()
+        summary = {
+            "requests": len({row[0] for row in rows}),
+            "items": len(rows),
+            "requested_quantity": sum(float(row[12] or 0) for row in rows),
+            "ordered_quantity": sum(float(row[17] or 0) for row in rows),
+            "delivered_quantity": sum(float(row[18] or 0) for row in rows),
+        }
+        return render_template(
+            "reports.html", rows=rows, filters=filters,
+            specialists=specialists, summary=summary,
+        )
+    finally:
+        conn.close()
+
+
+@app.route("/reports/items.csv")
+@login_required
+def export_item_report():
+    if not has_iam_permission("requests.export") or not has_iam_permission("requests.view_all"):
+        abort(403)
+    conn = data_db()
+    try:
+        cur = conn.cursor()
+        rows, filters = _load_item_report(cur, request.args)
+        buf = io.StringIO()
+        buf.write("\\ufeff")
+        writer = csv.writer(buf)
+        writer.writerow([
+            "شماره درخواست","تاریخ درخواست","نوع درخواست","واحد درخواست‌کننده",
+            "ثبت‌کننده","وضعیت درخواست","ردیف","کد کالا","شرح کالا","واحد",
+            "مقدار درخواستی","تاریخ نیاز","کارشناس خرید","وضعیت تخصیص",
+            "تعداد استعلام","مقدار سفارش","مقدار تحویل","تأمین‌کننده منتخب"
+        ])
+        type_map = {"goods":"مواد اولیه","equipment":"تجهیزات","service":"خدمات","other":"سایر"}
+        status_map = {"pending":"در جریان","submitted":"ثبت‌شده","approved":"تکمیل","rejected":"رد شده","cancelled":"لغو شده"}
+        assignment_map = {"assigned":"در حال اقدام","completed":"تکمیل‌شده","rejected":"رد شده","unassigned":"بدون تخصیص"}
+        for row in rows:
+            writer.writerow([
+                row[1],row[2],type_map.get(row[3],row[3]),row[4],
+                user_display_info(row[5])["full_name"],status_map.get(row[6],row[6]),
+                row[8],row[9],row[10],row[11],row[12],row[13],
+                user_display_info(row[14])["full_name"] if row[14] else "—",
+                assignment_map.get(row[15],row[15]),row[16],row[17],row[18],row[19]
+            ])
+        return Response(
+            buf.getvalue(), mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition":"attachment; filename=padra_item_level_report.csv"},
+        )
+    finally:
+        conn.close()
+
+
 @app.route("/export/csv")
 @login_required
 def export_csv():
