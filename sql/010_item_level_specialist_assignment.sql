@@ -28,8 +28,6 @@ BEGIN
         completed_by NVARCHAR(256) NULL,
         completed_at DATETIME2(3) NULL,
         completion_comment NVARCHAR(2000) NULL,
-        CONSTRAINT FK_request_item_assignments_requests FOREIGN KEY (request_id)
-            REFERENCES Project.requests(id) ON DELETE CASCADE,
         CONSTRAINT FK_request_item_assignments_items FOREIGN KEY (request_item_id)
             REFERENCES Project.request_items(id) ON DELETE CASCADE,
         CONSTRAINT UQ_request_item_assignments_item UNIQUE (request_item_id),
