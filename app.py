@@ -1523,6 +1523,10 @@ def _load_item_report(cur, args):
         "assignment_status": args.get("assignment_status", "").strip(),
         "from_date": args.get("from_date", "").strip(),
         "to_date": args.get("to_date", "").strip(),
+        "item_code": args.get("item_code", "").strip()[:80],
+        "unit": args.get("unit", "").strip()[:100],
+        "requester": args.get("requester", "").strip()[:100],
+        "supplier": args.get("supplier", "").strip()[:120],
     }
     clauses = []
     params = []
@@ -1553,6 +1557,21 @@ def _load_item_report(cur, args):
     if filters["to_date"]:
         clauses.append("r.request_date_fa<=?")
         params.append(filters["to_date"])
+    if filters["item_code"]:
+        clauses.append("i.item_code LIKE ?")
+        params.append("%" + filters["item_code"] + "%")
+    if filters["unit"]:
+        clauses.append("r.unit_name LIKE ?")
+        params.append("%" + filters["unit"] + "%")
+    if filters["requester"]:
+        clauses.append("r.requester_username LIKE ?")
+        params.append("%" + filters["requester"] + "%")
+    if filters["supplier"]:
+        clauses.append("""EXISTS (
+            SELECT 1 FROM Project.request_supplier_offers sf
+            WHERE sf.request_item_id=i.id AND sf.supplier_name LIKE ?
+        )""")
+        params.append("%" + filters["supplier"] + "%")
     if filters["q"]:
         like = "%" + filters["q"] + "%"
         clauses.append("""(
