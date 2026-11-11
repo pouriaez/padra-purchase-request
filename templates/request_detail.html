@@ -258,8 +258,11 @@
                 <td>
                   <input type="hidden" name="item_id[]" value="{{x[7]}}">
                   <select name="item_specialist[]" class="item-specialist-select" required>
+                    {% if not data.assignment_map.get(x[7]) %}
+                      <option value="" selected disabled>انتخاب کارشناس خرید</option>
+                    {% endif %}
                     {% for sp in purchase_specialists %}
-                      <option value="{{sp.username}}" {% if sp.username == data.assignment_map.get(x[7]) or (not data.assignment_map.get(x[7]) and loop.first) %}selected{% endif %}>{{sp.full_name}} — {{sp.username}}</option>
+                      <option value="{{sp.username}}" {% if sp.username == data.assignment_map.get(x[7]) %}selected{% endif %}>{{sp.full_name}} — {{sp.username}}</option>
                     {% endfor %}
                   </select>
                 </td>
