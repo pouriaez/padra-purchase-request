@@ -16,7 +16,7 @@
 
 <section class="stats-grid">
   <div class="stat-card"><span>تعداد درخواست‌ها</span><b>{{summary.requests}}</b><small>در نتایج فیلترشده</small></div>
-  <div class="stat-card"><span>تعداد اقلام</span><b>{{summary.items}}</b><small>هر ردیف معادل یک قلم کالا</small></div>
+  <div class="stat-card"><span>تعداد اقلام</span><b>{{summary['items']}}</b><small>هر ردیف معادل یک قلم کالا</small></div>
   <div class="stat-card"><span>مقدار درخواستی</span><b>{{summary.requested_quantity|round(3)}}</b><small>جمع مقدار اقلام</small></div>
   <div class="stat-card"><span>مقدار سفارش</span><b>{{summary.ordered_quantity|round(3)}}</b><small>جمع پیش‌فاکتورهای ثبت‌شده</small></div>
   <div class="stat-card"><span>مقدار تحویل</span><b>{{summary.delivered_quantity|round(3)}}</b><small>جمع رسیدهای تحویل</small></div>
