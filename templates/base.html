@@ -47,7 +47,7 @@
         ثبت درخواست جدید
       </a>
       {% endif %}
-      {% if has_iam_permission('requests.export') %}
+      {% if has_iam_permission('requests.export') and has_iam_permission('requests.view_all') %}
       <a href="{{url_for('export_csv')}}" class="top-nav-link">
         خروجی درخواست‌ها
       </a>
