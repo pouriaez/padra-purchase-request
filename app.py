@@ -1683,13 +1683,8 @@ def report_access_scope():
         abort(403)
     if "requests.view_all" in permissions:
         return "1=1", []
-    scope_clauses = []
-    if "requests.view_padra" in permissions:
-        scope_clauses.append("r.workflow_type = 'padra'")
-    if "requests.view_team" in permissions:
-        scope_clauses.append("r.workflow_type = 'serkan'")
-    if scope_clauses:
-        return " OR ".join(f"({clause})" for clause in scope_clauses), []
+    if "requests.view_padra" in permissions or "requests.view_team" in permissions:
+        return "1=1", []
     if "requests.view_assigned" in permissions or "requests.view_own" in permissions:
         return request_visibility_clause(permissions)
     abort(403)
