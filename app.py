@@ -1515,7 +1515,7 @@ def index():
 
 
 
-def _load_item_report(cur, args, summary_mode=None):
+def _load_item_report(cur, args, summary_mode=None, visibility=None, visibility_params=None):
     filters = {
         "q": args.get("q", "").strip()[:100],
         "request_type": args.get("request_type", "").strip(),
@@ -1583,6 +1583,9 @@ def _load_item_report(cur, args, summary_mode=None):
                        WHERE sx.request_item_id=i.id AND sx.supplier_name LIKE ?)
         )""")
         params.extend([like] * 7)
+    if visibility:
+        clauses.append(f"({visibility})")
+        params.extend(visibility_params or [])
     where = " WHERE " + " AND ".join(clauses) if clauses else ""
     sql = """
         SELECT TOP (5000)
@@ -1674,17 +1677,34 @@ def _load_item_report(cur, args, summary_mode=None):
     return rows, filters
 
 
+def report_access_scope():
+    permissions = current_iam_permissions()
+    if "requests.export" not in permissions:
+        abort(403)
+    if "requests.view_all" in permissions:
+        return "1=1", []
+    scope_clauses = []
+    if "requests.view_padra" in permissions:
+        scope_clauses.append("r.workflow_type = 'padra'")
+    if "requests.view_team" in permissions:
+        scope_clauses.append("r.workflow_type = 'serkan'")
+    if scope_clauses:
+        return " OR ".join(f"({clause})" for clause in scope_clauses), []
+    if "requests.view_assigned" in permissions or "requests.view_own" in permissions:
+        return request_visibility_clause(permissions)
+    abort(403)
+
+
 @app.route("/reports")
 @login_required
 def reports():
-    if not has_iam_permission("requests.export") or not has_iam_permission("requests.view_all"):
-        abort(403)
+    visibility, visibility_params = report_access_scope()
     conn = data_db()
     try:
         cur = conn.cursor()
-        rows, filters = _load_item_report(cur, request.args)
-        product_summary, _ = _load_item_report(cur, request.args, summary_mode="products")
-        totals, _ = _load_item_report(cur, request.args, summary_mode="totals")
+        rows, filters = _load_item_report(cur, request.args, visibility=visibility, visibility_params=visibility_params)
+        product_summary, _ = _load_item_report(cur, request.args, summary_mode="products", visibility=visibility, visibility_params=visibility_params)
+        totals, _ = _load_item_report(cur, request.args, summary_mode="totals", visibility=visibility, visibility_params=visibility_params)
         specialists = get_purchase_specialists()
         report_user_names = {}
         for report_row in rows:
@@ -1711,12 +1731,11 @@ def reports():
 @app.route("/reports/products.csv")
 @login_required
 def export_product_summary():
-    if not has_iam_permission("requests.export") or not has_iam_permission("requests.view_all"):
-        abort(403)
+    visibility, visibility_params = report_access_scope()
     conn = data_db()
     try:
         cur = conn.cursor()
-        rows, _filters = _load_item_report(cur, request.args, summary_mode="products")
+        rows, _filters = _load_item_report(cur, request.args, summary_mode="products", visibility=visibility, visibility_params=visibility_params)
         buf = io.StringIO()
         buf.write("\ufeff")
         writer = csv.writer(buf)
@@ -1737,12 +1756,11 @@ def export_product_summary():
 @app.route("/reports/items.csv")
 @login_required
 def export_item_report():
-    if not has_iam_permission("requests.export") or not has_iam_permission("requests.view_all"):
-        abort(403)
+    visibility, visibility_params = report_access_scope()
     conn = data_db()
     try:
         cur = conn.cursor()
-        rows, filters = _load_item_report(cur, request.args)
+        rows, filters = _load_item_report(cur, request.args, visibility=visibility, visibility_params=visibility_params)
         buf = io.StringIO()
         buf.write("\ufeff")
         writer = csv.writer(buf)
