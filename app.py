@@ -2239,15 +2239,15 @@ def view_request(request_id):
             )
             return_target_title = previous_approval[2] if previous_approval else "مرحله قبل"
 
-    if (
+    can_edit_returned_request = (
         h[12] == "padra"
         and h[9] == "submitted"
         and h[8] == current_user.username
         and has_iam_permission("requests.create")
-        and data["approvals"]
+        and bool(data["approvals"])
         and all(a[3] == "waiting" for a in data["approvals"])
-    ):
-        can_resubmit_request = True
+    )
+    can_resubmit_request = can_edit_returned_request
 
     return render_template(
         "request_detail.html",
@@ -2258,6 +2258,7 @@ def view_request(request_id):
         can_return_to_previous=can_return_to_previous,
         return_target_title=return_target_title,
         can_resubmit_request=can_resubmit_request,
+        can_edit_returned_request=can_edit_returned_request,
         can_manage_item_assignments=has_iam_permission("requests.assign_specialist"),
         can_record_delivery=(h[12] == "padra" and current_user.username == "kharid_padra") or can_view_item_assignment,
     )
