@@ -3164,6 +3164,106 @@ def return_request_to_previous(request_id):
     return redirect(url_for("view_request", request_id=request_id))
 
 
+@app.route("/request/<int:request_id>/edit", methods=["POST"])
+@login_required
+def edit_returned_request(request_id):
+    """ویرایش اقلام درخواست پادرا فقط توسط ثبت‌کننده و در وضعیت برگشتی."""
+    if not has_iam_permission("requests.create"):
+        abort(403)
+    conn = cur = None
+    try:
+        conn = data_db()
+        conn.autocommit = False
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT workflow_type,status,requester_username
+               FROM Project.requests WITH (UPDLOCK, ROWLOCK) WHERE id=?""",
+            request_id,
+        )
+        header = cur.fetchone()
+        if not header or header[0] != "padra" or header[1] != "submitted" or header[2] != current_user.username:
+            conn.rollback()
+            abort(403)
+
+        # تا وقتی هیچ اقدام بعدی در زنجیره خرید انجام نشده، فقط اقلام پایه قابل اصلاح‌اند.
+        cur.execute(
+            """SELECT
+                 (SELECT COUNT(*) FROM Project.request_supplier_offers WHERE request_id=?),
+                 (SELECT COUNT(*) FROM Project.request_deliveries WHERE request_id=?),
+                 (SELECT COUNT(*) FROM Project.request_item_assignments WHERE request_id=?)""",
+            request_id, request_id, request_id,
+        )
+        dependencies = cur.fetchone()
+        if dependencies and any(int(x or 0) for x in dependencies):
+            conn.rollback()
+            flash("به دلیل وجود سوابق استعلام، تخصیص یا تحویل، ویرایش اقلام این درخواست مجاز نیست.", "error")
+            return redirect(url_for("view_request", request_id=request_id))
+
+        descriptions = request.form.getlist("item_description[]")
+        codes = request.form.getlist("item_code[]")
+        units = request.form.getlist("item_unit[]")
+        quantities = request.form.getlist("quantity[]")
+        needed_dates = request.form.getlist("needed_date[]")
+        locations = request.form.getlist("usage_location[]")
+        if not descriptions or not (len(descriptions) == len(codes) == len(units) == len(quantities) == len(needed_dates) == len(locations)):
+            flash("اطلاعات ردیف‌های کالا کامل نیست.", "error")
+            return redirect(url_for("view_request", request_id=request_id))
+
+        items = []
+        for i, desc in enumerate(descriptions):
+            desc = (desc or "").strip()
+            if not desc:
+                continue
+            try:
+                qty = Decimal(normalize_digits(quantities[i]).replace(",", ""))
+                if qty <= 0:
+                    raise ValueError()
+                needed = validate_jalali_date(needed_dates[i], f"تاریخ نیاز ردیف {i+1}")
+            except (InvalidOperation, ValueError, TypeError):
+                flash(f"مقدار یا تاریخ نیاز ردیف {i+1} معتبر نیست.", "error")
+                return redirect(url_for("view_request", request_id=request_id))
+            unit = (units[i] or "").strip()
+            if not unit:
+                flash(f"واحد سنجش ردیف {i+1} الزامی است.", "error")
+                return redirect(url_for("view_request", request_id=request_id))
+            items.append((len(items)+1, (codes[i] or "").strip() or None, desc, unit, qty, needed, (locations[i] or "").strip()))
+        if not items:
+            flash("حداقل یک قلم کالا باید باقی بماند.", "error")
+            return redirect(url_for("view_request", request_id=request_id))
+
+        cur.execute("DELETE FROM Project.request_items WHERE request_id=?", request_id)
+        for item in items:
+            cur.execute(
+                """INSERT INTO Project.request_items
+                   (request_id,line_no,item_code,item_description,unit_name,quantity,needed_date_fa,usage_location)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                request_id, *item,
+            )
+        cur.execute(
+            """INSERT INTO Project.request_history(request_id,action_name,actor_username,details)
+               VALUES (?,N'ویرایش درخواست برگشتی توسط ثبت‌کننده پادرا',?,N'اقلام و مشخصات ردیف‌های درخواست پیش از ارسال مجدد اصلاح شد.')""",
+            request_id, current_user.username,
+        )
+        cur.execute("UPDATE Project.requests SET updated_at=GETDATE() WHERE id=?", request_id)
+        conn.commit()
+        flash("تغییرات درخواست ذخیره شد. پس از بازبینی، می‌توانید آن را مجدداً برای مدیرعامل ارسال کنید.", "success")
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+    except Exception:
+        if conn:
+            conn.rollback()
+        app.logger.exception("Returned Padra request edit failed")
+        flash("ذخیره تغییرات انجام نشد؛ اطلاعات درخواست بدون تغییر باقی ماند.", "error")
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return redirect(url_for("view_request", request_id=request_id))
+
+
 @app.route("/request/<int:request_id>/resubmit", methods=["POST"])
 @login_required
 def resubmit_request(request_id):
