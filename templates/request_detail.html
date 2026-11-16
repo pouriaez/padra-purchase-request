@@ -172,6 +172,40 @@
 </section>
 {% endif %}
 
+{% if can_edit_returned_request %}
+<section class="panel reassign-box no-print">
+  <div class="reassign-head">
+    <b>ویرایش درخواست برگشتی</b>
+    <span>اقلام، تعداد، واحد، تاریخ نیاز و محل مصرف را اصلاح کنید. پس از ذخیره، درخواست را از بخش ارسال مجدد دوباره به مدیرعامل بفرستید.</span>
+  </div>
+  <form method="post" action="{{url_for('edit_returned_request',request_id=h[0])}}" class="returned-edit-form">
+    <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+    <div class="table-wrap">
+      <table class="items-table">
+        <thead><tr><th>کد کالا</th><th>شرح کالا</th><th>واحد</th><th>تعداد</th><th>تاریخ نیاز (شمسی)</th><th>محل مصرف</th><th></th></tr></thead>
+        <tbody id="returned-edit-items">
+          {% for x in data['items'] %}
+          <tr>
+            <td><input name="item_code[]" value="{{x[1] or ''}}" maxlength="100"></td>
+            <td><input name="item_description[]" value="{{x[2]}}" required maxlength="1000"></td>
+            <td><input name="item_unit[]" value="{{x[3]}}" required maxlength="100"></td>
+            <td><input name="quantity[]" type="number" min="0.001" step="0.001" value="{{x[4]}}" required></td>
+            <td><input name="needed_date[]" value="{{x[5]}}" required placeholder="۱۴۰۵/۰۹/۱۵"></td>
+            <td><input name="usage_location[]" value="{{x[6] or ''}}" maxlength="500"></td>
+            <td><button type="button" class="btn danger small remove-returned-item">حذف</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn secondary" id="add-returned-item">＋ افزودن ردیف کالا</button>
+      <button type="submit" class="btn primary" onclick="return confirm('تغییرات اقلام درخواست ذخیره شود؟');">ذخیره تغییرات درخواست</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
 {% if can_resubmit_request %}
 <section class="panel reassign-box no-print">
   <div class="reassign-head">
@@ -756,6 +790,28 @@
     }
   }
   (function() {
+    var returnedItems = document.getElementById('returned-edit-items');
+    var addReturnedItem = document.getElementById('add-returned-item');
+    if (returnedItems && addReturnedItem) {
+      addReturnedItem.addEventListener('click', function() {
+        var row = document.createElement('tr');
+        row.innerHTML = '<td><input name="item_code[]" maxlength="100"></td>' +
+          '<td><input name="item_description[]" required maxlength="1000"></td>' +
+          '<td><input name="item_unit[]" required maxlength="100"></td>' +
+          '<td><input name="quantity[]" type="number" min="0.001" step="0.001" required></td>' +
+          '<td><input name="needed_date[]" required placeholder="۱۴۰۵/۰۹/۱۵"></td>' +
+          '<td><input name="usage_location[]" maxlength="500"></td>' +
+          '<td><button type="button" class="btn danger small remove-returned-item">حذف</button></td>';
+        returnedItems.appendChild(row);
+      });
+      returnedItems.addEventListener('click', function(event) {
+        if (event.target.classList.contains('remove-returned-item')) {
+          if (returnedItems.querySelectorAll('tr').length > 1) event.target.closest('tr').remove();
+          else alert('حداقل یک ردیف کالا باید باقی بماند.');
+        }
+      });
+    }
+
     document.querySelectorAll('[data-add-offer]').forEach(function(button) {
       button.addEventListener('click', function() {
         var body = document.getElementById(button.getAttribute('data-add-offer'));
